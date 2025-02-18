@@ -3,21 +3,17 @@ import java.net.*;
 
 public class Client {
 
-    private Socket socket = null;
+    private DatagramSocket socket = null;
     private BufferedReader in = null; // Read data coming from socket
     private BufferedWriter out = null; // Send data through socket
+    private InetAddress serverAddress;
 
     private boolean _establishConnection(String serverAddr, int serverPort) {
 
         try {
-            socket = new Socket(serverAddr, serverPort);
-            System.out.println("Connected");
-
-            // Input from terminal
-            in = new BufferedReader(new InputStreamReader(System.in));
-
-            // Output to socket
-            out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            socket = new DatagramSocket();
+            serverAddress = InetAddress.getByName(serverAddr);
+            System.out.println("Connected to Server");
         } catch (UnknownHostException u) { System.out.println(u); return false;
         } catch (IOException i) { System.out.println(i); return false; }
 
@@ -26,9 +22,9 @@ public class Client {
 
     private void _closeConnection() {
         try {
-            in.close();
-            out.close();
-            socket.close();
+            if (in != null) { in.close(); }
+            if (out != null) { out.close(); }
+            if (socket != null) { socket.close(); }
         } catch (IOException i) { System.out.println(i); }
     }
 
@@ -40,15 +36,22 @@ public class Client {
 
         // Read message from input
         try {
-        String m = "";
-        while (true) {
-            m = in.readLine();
-            
-            out.write(m + "\n");
-            out.flush();
+            // Input from terminal
+            in = new BufferedReader(new InputStreamReader(System.in));
+            byte[] sendData;
 
-            if (m.equals("exit")) { break; } // Disconnect client
-        }
+            while (true) {
+
+                // Read message from command line
+                String message = in.readLine();
+                sendData = message.getBytes();
+
+                // Send message as UDP packet
+                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverAddress, serverPort);
+                socket.send(sendPacket);
+
+                if (message.equals("exit")) { break; } // Disconnect client
+            }
         } catch (IOException e) { System.out.println(e);}
 
         // Close connection

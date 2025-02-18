@@ -3,36 +3,23 @@ import java.net.*;
 
 public class Server {
  
-    private Socket socket = null;
-    private ServerSocket serverSocket = null; // Waits for incoming client requests
-    private BufferedReader in = null; // Communicates with client
-
-    private void _waitForClient() {
-        try {
-            while (true) {
-                System.out.println("Waiting for Client...");
-
-                Socket clienSocket = serverSocket.accept();
-                System.out.println("Client connected: " + socket.getInetAddress());
-
-                // Handle new client in its own thread
-                new ClientHandler(clienSocket).start();
-            }
-        } catch (IOException i) { System.out.println(i); }
-    }
+    private DatagramSocket serverSocket = null; // Waits for incoming client requests
 
     private boolean _startServer(int serverPort) {
 
         try {
-            serverSocket = new ServerSocket(serverPort);
+            serverSocket = new DatagramSocket(serverPort);
             System.out.println("Server started");
             
-            _waitForClient();
-            System.out.println("Closing connection");
+            while (true) {
 
-            //Close connection
-            socket.close();
-            in.close();
+                byte[] recvBuffer = new byte[1024];
+                DatagramPacket recvPacket = new DatagramPacket(recvBuffer, recvBuffer.length);
+
+                serverSocket.receive(recvPacket);
+                new ClientHandler(recvPacket, serverSocket).start(); // Handle new message on its own thread
+            }
+            
         } catch (IOException i) { System.out.println(i); }
 
         return true;
@@ -48,31 +35,19 @@ public class Server {
 
 class ClientHandler extends Thread {
     
-    private Socket socket;
-    private BufferedReader in;
+    private DatagramPacket recvPacket;
+    private DatagramSocket serverSocket; // for Server response, didnt implement yet
 
-    public ClientHandler(Socket socket) {
-        this.socket = socket;
+    public ClientHandler(DatagramPacket recvPacket, DatagramSocket serverSocket) {
+        this.recvPacket = recvPacket;
+        this.serverSocket = serverSocket;
     }
 
     public void run() {
-        try {
 
-            // Take input from client socket
-            String m = "";
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            while ((m = in.readLine()) != null) { // Read input until client disconnects
-                
-                System.out.println("Client: " + m);
-                if (m.equals("exit")) { break; } // Client disconnect
-                
-            }
-        } catch (IOException e) { System.out.println(e);
-        } finally { // close in and socket always
-            try { 
-                if (in != null) { in.close(); }
-                if (socket != null) { socket.close(); }
-            } catch (IOException e) { System.out.println(e); }
-        }
+        String message = new String(recvPacket.getData(), 0, recvPacket.getLength());
+        System.out.println("Recieved from client: " + message);
+
+        if (message.equals("exit")) { System.out.println("Client disconnect"); return; }
     }
 }

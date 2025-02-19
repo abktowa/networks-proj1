@@ -5,49 +5,43 @@ public class Server {
  
     private DatagramSocket serverSocket = null; // Waits for incoming client requests
 
-    private boolean _startServer(int serverPort) {
+    private void _handleClient(DatagramPacket recvPacket, DatagramSocket serverSocket) {
+
+        try {
+            Packet clientPacket = new Packet(recvPacket);
+            clientPacket.print();
+        } catch (IOException e) { System.out.println(e);
+        } catch (ClassNotFoundException e) { System.out.println(e); }
+
+    }
+
+    private void _listen() throws IOException {
+        while (true) {
+
+            byte[] recvBuffer = new byte[1024];
+            DatagramPacket recvPacket = new DatagramPacket(recvBuffer, recvBuffer.length);
+            serverSocket.receive(recvPacket);
+            
+            Thread clientHandlerThread = new Thread(() -> {
+                _handleClient(recvPacket, serverSocket);
+            });
+
+            clientHandlerThread.start();
+        }
+    }
+    private void _startServer(int serverPort) {
 
         try {
             serverSocket = new DatagramSocket(serverPort);
             System.out.println("Server started");
             
-            while (true) {
+            _listen();
 
-                byte[] recvBuffer = new byte[1024];
-                DatagramPacket recvPacket = new DatagramPacket(recvBuffer, recvBuffer.length);
-
-                serverSocket.receive(recvPacket);
-                new ClientHandler(recvPacket, serverSocket).start(); // Handle new message on its own thread
-            }
-            
-        } catch (IOException i) { System.out.println(i); }
-
-        return true;
+        } catch (IOException i) { System.out.println(i); } 
     }
 
     public Server(int serverPort) {
-
-        boolean serverStarted = _startServer(serverPort);
-
+        _startServer(serverPort);
     }
 
-}
-
-class ClientHandler extends Thread {
-    
-    private DatagramPacket recvPacket;
-    private DatagramSocket serverSocket; // for Server response, didnt implement yet
-
-    public ClientHandler(DatagramPacket recvPacket, DatagramSocket serverSocket) {
-        this.recvPacket = recvPacket;
-        this.serverSocket = serverSocket;
-    }
-
-    public void run() {
-
-        String message = new String(recvPacket.getData(), 0, recvPacket.getLength());
-        System.out.println("Recieved from client: " + message);
-
-        if (message.equals("exit")) { System.out.println("Client disconnect"); return; }
-    }
 }

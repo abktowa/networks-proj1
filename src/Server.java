@@ -1,6 +1,9 @@
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 
 public class Server {
@@ -8,6 +11,7 @@ public class Server {
     private DatagramSocket serverSocket = null; // Waits for incoming client requests
 
     private ArrayList<ClientInfo> _activeClients;
+    private HashMap<ClientInfo, ArrayList<String>> _activeClientFileListings;
 
     private void _handleClient(DatagramPacket recvPacket, DatagramSocket serverSocket) {
 
@@ -25,6 +29,8 @@ public class Server {
             // Handle each packet Type
             if (clientPacket.getType() == clientPacket.typeToByte("HEARTBEAT")) {
                 _handleHeartbeat(clientPacket, clientAddress, clientPort);
+            } else if (clientPacket.getType() == clientPacket.typeToByte("FILELIST")) {
+                _handleFilelist(clientPacket, clientAddress, clientPort);
             } else {
 
             }
@@ -65,6 +71,29 @@ public class Server {
             }
         }
 
+    }
+
+    private void _handleFilelist(Packet clientPacket, InetAddress clientAddress, int clientPort) {
+
+        // Update file listing
+        // Client only sends file listing when a file has been created or deleted so no need to check
+        // if this listing is different, it always will be different
+        ClientInfo client = new ClientInfo(clientAddress, clientPort, clientPacket.getTime());
+        String filelistString = new String(clientPacket.getData(), StandardCharsets.UTF_8);
+        ArrayList<String> fileList = new ArrayList<>(Arrays.asList(filelistString.split(",")));
+
+        _activeClientFileListings.put(client, fileList);
+
+        // Print File Listings
+        System.out.println("All File Listings");
+        for (ClientInfo c : _activeClientFileListings.keySet()) {
+            ArrayList<String> fL = _activeClientFileListings.get(c);
+            System.out.println(c);
+            for (String f : fL) {
+                System.out.println("     " + f);
+            }
+        }
+        System.out.println();
     }
 
     private void _monitorClientFailures() {
@@ -127,6 +156,7 @@ public class Server {
     public Server(int serverPort) {
 
         _activeClients = new ArrayList<>();
+        _activeClientFileListings = new HashMap<ClientInfo, ArrayList<String>>();
         _startServer(serverPort);
     }
 

@@ -1,6 +1,7 @@
 import java.net.InetAddress;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Objects;
 import java.util.TimeZone;
 
 public class ClientInfo {
@@ -42,5 +43,11 @@ public class ClientInfo {
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
         sdf.setTimeZone(TimeZone.getDefault());
         return sdf.format(new Date(getLastHeartbeatTime()));
+    }
+
+    // For use as HashMap key
+    @Override
+    public int hashCode() {
+        return Objects.hash(_ipAddress, _port);
     }
 }

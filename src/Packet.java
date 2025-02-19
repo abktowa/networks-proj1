@@ -120,7 +120,8 @@ public class Packet implements Serializable {
     } 
 
     // Formatting & Printing Packet
-    public void print() {
+    @Override
+    public String toString() {
         String out = String.format("Packet Recieved: \n" +
                                     "Version: %d\n" +
                                     "Type: %s\n" +
@@ -132,7 +133,7 @@ public class Packet implements Serializable {
                                     (int) this._nodeID, 
                                     this.getFormattedTime(), 
                                     new String(this._data));
-        System.out.println(out);
+        return out;
     }
     public String getFormattedTime() {
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");

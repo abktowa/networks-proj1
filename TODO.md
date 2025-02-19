@@ -5,17 +5,17 @@
 ## Client-Server Implementation
 
 ### Client Functions
-- [ ] Send heartbeats from Client
-- [ ] Send file listing of designated "home" directory on Client to Server
+- [X] Send heartbeats from Client
+- [X] Send file listing of designated "home" directory on Client to Server
 - [ ] Send content of all files to Server
 - [ ] Store all other Clients' file listings
 - [ ] Store all other Clients' file contents
 
 ### Server Functions
-- [ ] Store active Clients
-- [ ] Update active Client list when one dies
-- [ ] Update active Client list when one comes online
-- [ ] Store active Clients' file listings
+- [X] Store active Clients
+- [X] Update active Client list when one dies
+- [X] Update active Client list when one comes online
+- [X] Store active Clients' file listings
 - [ ] Store active Clients' file contents
 - [ ] Send all active Clients' file listings to all active Clients
 - [ ] Send all active Clients' file contents to all active Clients

@@ -8,7 +8,7 @@
 - [X] Send heartbeats from Client
 - [X] Send file listing of designated "home" directory on Client to Server
 - [ ] Send content of all files to Server
-- [ ] Store all other Clients' file listings
+- [X] Store all other Clients' file listings
 - [ ] Store all other Clients' file contents
 
 ### Server Functions
@@ -17,7 +17,7 @@
 - [X] Update active Client list when one comes online
 - [X] Store active Clients' file listings
 - [ ] Store active Clients' file contents
-- [ ] Send all active Clients' file listings to all active Clients
+- [X] Send all active Clients' file listings to all active Clients
 - [ ] Send all active Clients' file contents to all active Clients
 
 ## Peer to Peer Implementation

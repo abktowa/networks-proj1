@@ -129,7 +129,7 @@ public class Packet implements Serializable {
                                     "Time: %s\n" +
                                     "Data: %s\n", 
                                     (int) this._version, 
-                                    this.byteToType(this._type), 
+                                    Packet.byteToType(this._type), 
                                     (int) this._nodeID, 
                                     this.getFormattedTime(), 
                                     new String(this._data));

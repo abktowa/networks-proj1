@@ -28,9 +28,9 @@ public class Server {
             System.out.println(clientPacket);
 
             // Handle each packet Type
-            if (clientPacket.getType() == clientPacket.typeToByte("HEARTBEAT")) {
+            if (clientPacket.getType() == Packet.typeToByte("HEARTBEAT")) {
                 _handleHeartbeat(clientPacket, clientAddress, clientPort);
-            } else if (clientPacket.getType() == clientPacket.typeToByte("FILELIST")) {
+            } else if (clientPacket.getType() == Packet.typeToByte("FILELIST")) {
                 _handleFilelist(clientPacket, clientAddress, clientPort);
             } else {
 

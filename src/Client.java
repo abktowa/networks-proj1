@@ -172,7 +172,7 @@ public class Client {
 
             Packet packet = new Packet();
             packet.setVersion((byte) 1);
-            packet.setType(packet.typeToByte("HEARTBEAT"));
+            packet.setType(Packet.typeToByte("HEARTBEAT"));
             packet.setNodeID(_nodeID);
             packet.setTime(System.currentTimeMillis());
             packet.setLength(data.length);
@@ -233,7 +233,7 @@ public class Client {
 
         Packet packet = new Packet();
         packet.setVersion((byte) 1);
-        packet.setType(packet.typeToByte("FILELIST"));
+        packet.setType(Packet.typeToByte("FILELIST"));
         packet.setNodeID(_nodeID);
         packet.setTime(System.currentTimeMillis());
         packet.setLength(_fileListing.size());

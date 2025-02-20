@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.*;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 
 public class Client {
@@ -17,9 +18,13 @@ public class Client {
     // Threads
     private Thread _heartbeatThread;
     private Thread _watchDirectoryThread;
+    private Thread _serverListeningThread;
 
-    // File Listing
-    private ArrayList _fileListing;
+    // Client Data
+    private ArrayList<String> _fileListing;
+
+    // Data from Server
+    private ArrayList<ClientInfo> _allActiveClients;
 
     // Setup
     private boolean _establishConnection(String serverAddr, int serverPort) {
@@ -45,7 +50,7 @@ public class Client {
         _watchDirectoryThread.interrupt();
     }
     
-    // Core Functionality
+    // Communicate with Server
     private void _sendPacketToServer(Packet packet) {
 
         packet.setNodeID(_nodeID);
@@ -58,8 +63,104 @@ public class Client {
             System.out.println("Failed to send heartbeat" + e.getMessage());
         }
     }
+    private void _listen() {
+        System.out.println("Listening for server");
+        try {
+            while (true) {
 
+                byte[] recvBuffer = new byte[1024];
+                DatagramPacket recvPacket = new DatagramPacket(recvBuffer, recvBuffer.length);
+                socket.receive(recvPacket);
 
+                Thread serverHandlerThread = new Thread(() -> {
+                    _handleServerPacket(recvPacket);
+                });
+                serverHandlerThread.start();
+            }
+        } catch (IOException e) { System.out.println("Error recving from server: " + e.getMessage()); }
+    }
+    
+    // Handle Server
+    private void _handleServerPacket(DatagramPacket packet) {
+
+        try {
+            // Deserialize packet -> Packet
+            Packet serverPacket = new Packet(packet);
+
+            // Handle each packet type
+            if (serverPacket.getType() == Packet.typeToByte("RECOVERY")) {
+                _handleRecovery(serverPacket);
+            } else if (serverPacket.getType() == Packet.typeToByte("FAILURE")) {
+                _handleFailure(serverPacket);
+            } else {
+                System.out.println("Unknown Packet Type from Server");
+            }
+        } catch (IOException e) { System.out.println(e);
+        } catch (ClassNotFoundException e) { System.out.println(e); }
+    }
+    private void _handleRecovery(Packet serverPacket) {
+
+        String activeClientListAsString = new String(serverPacket.getData(), StandardCharsets.UTF_8);
+        String[] clientStrings = activeClientListAsString.split(",");
+
+        ArrayList<ClientInfo> activeClientsFromPacket = new ArrayList<ClientInfo>();
+        for (String clientStr : clientStrings) {
+            ClientInfo client = ClientInfo.fromString(clientStr);
+            if (client != null) { activeClientsFromPacket.add(client); }
+        }
+
+        // Log recovered Clients
+        for (ClientInfo client : activeClientsFromPacket) {
+            if (!_allActiveClients.contains(client)) {
+                System.out.println("New Client: " + client);
+            }
+        }
+
+        _allActiveClients = activeClientsFromPacket; // copy to all active clients
+
+        System.out.println("Updated active clients list after recovery");
+
+        // Print Full Client List
+        System.out.println();
+        System.out.println("All Active Clients:");
+        for (ClientInfo client : _allActiveClients) {
+            System.out.println(client);
+        }
+        System.out.println();
+
+    }
+    private void _handleFailure(Packet serverPacket) {
+
+        String activeClientListAsString = new String(serverPacket.getData(), StandardCharsets.UTF_8);
+        String[] clientStrings = activeClientListAsString.split(",");
+
+        ArrayList<ClientInfo> activeClientsFromPacket = new ArrayList<ClientInfo>();
+        for (String clientStr : clientStrings) {
+            ClientInfo client = ClientInfo.fromString(clientStr);
+            if (client != null) { activeClientsFromPacket.add(client); }
+        }
+
+        // Log failed Clients
+        for (ClientInfo client : _allActiveClients) {
+            if (!activeClientsFromPacket.contains(client)) {
+                System.out.println("Dead Client: " + client);
+            }
+        }
+
+        _allActiveClients = activeClientsFromPacket; // copy to all active clients
+
+        System.out.println("Updated active clients list after failure");
+
+        // Print Full Client List
+        System.out.println();
+        System.out.println("All Active Clients:");
+        for (ClientInfo client : _allActiveClients) {
+            System.out.println(client);
+        }
+        System.out.println();
+
+    }
+    
     // Heartbeat
     private void _sendHeartbeatEvery(int heartbeatInterval) {
         
@@ -114,7 +215,6 @@ public class Client {
         } catch (IOException e) { System.out.println(e); 
         } catch (InterruptedException e) { System.out.println("Ended Directory Watching"); }
     }
-
     private void _sendFileListing() {
 
         // Get file listing and put in array
@@ -142,6 +242,7 @@ public class Client {
         _sendPacketToServer(packet);
         System.out.println("Sending file listing");
     }
+    
     // Setup
     public Client(String serverAddr, int serverPort, short nodeID) {
 
@@ -158,6 +259,8 @@ public class Client {
     }
     private void _startClient() {
 
+        _allActiveClients = new ArrayList<ClientInfo>();
+
         // Start Heartbeats
         SecureRandom rand = new SecureRandom();
         int heartbeatInterval = rand.nextInt(29) + 1; // Generate random number 1 to 30
@@ -171,6 +274,12 @@ public class Client {
             _watchDirectory();
         });
         _watchDirectoryThread.start();
+
+        // Start Listening from Server
+        _serverListeningThread = new Thread(() -> {
+            _listen();
+        });
+        _serverListeningThread.start();
 
         // Input from terminal
         in = new BufferedReader(new InputStreamReader(System.in));

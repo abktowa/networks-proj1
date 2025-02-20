@@ -70,12 +70,14 @@ public class Main {
             short nodeID = (short) randInt;
 
             // Create "home" directory for "node" and fill with 5 text files
-            String dirPath = _createNodeFiles(nodeID);
+            final String dirPath = _createNodeFiles(nodeID);
+            // Make sure files are deleted even if SIGINT (ChatGPT)
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                // Delete "node" "files"
+                _deleteNodeDir(dirPath);
+            }));
 
             Client client = new Client(serverAddress, port, nodeID);
-
-            // Delete "node" "files"
-            _deleteNodeDir(dirPath);
         
         } else if (opt.equals("SERVER")) {
             System.out.println(String.format("Starting %s on %s:%d", opt, serverAddress, port));

@@ -66,7 +66,7 @@ public class Packet implements Serializable {
 
 
     // Type
-    public byte typeToByte(String type) {
+    public static byte typeToByte(String type) {
         switch (type) {
             case "HEARTBEAT":
                 return (byte) 1;
@@ -80,7 +80,7 @@ public class Packet implements Serializable {
                 return (byte) 0;
         }
     }
-    public String byteToType(byte type) {
+    public static String byteToType(byte type) {
         switch (type) {
             case (byte) 0 :
                 return "UNKNOWN";

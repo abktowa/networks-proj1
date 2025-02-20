@@ -37,12 +37,27 @@ public class ClientInfo {
     // Formatting & Printing
     @Override
     public String toString() {
-        return String.format("Client [%s:%d] - Last Heartbeat: %s", _ipAddress.getHostAddress(), _port, getFormattedLastHeartbeatTime());
+        return String.format("%s:%d:%d", _ipAddress.getHostAddress(), _port, _lastHeartbeatTime);
     }
+    
     public String getFormattedLastHeartbeatTime() {
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
         sdf.setTimeZone(TimeZone.getDefault());
         return sdf.format(new Date(getLastHeartbeatTime()));
+    }
+
+    // Serialization/Deserialization (ChatGPT)
+    public static ClientInfo fromString(String data) {
+        try {
+            String[] parts = data.split(":");
+            if (parts.length != 3) { return null; }
+
+            InetAddress ip = InetAddress.getByName(parts[0]);
+            int port = Integer.parseInt(parts[1]);
+            long lastHeartbeat = Long.parseLong(parts[2]);
+
+            return new ClientInfo(ip, port, lastHeartbeat);
+        } catch (Exception e) { System.out.println("Error deserializing ClientInfo: " + e.getMessage()); return null; }
     }
 
     // For use as HashMap key

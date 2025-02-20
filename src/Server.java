@@ -13,6 +13,7 @@ public class Server {
     private ArrayList<ClientInfo> _activeClients;
     private HashMap<ClientInfo, ArrayList<String>> _activeClientFileListings;
 
+    // Handling Client Packets
     private void _handleClient(DatagramPacket recvPacket, DatagramSocket serverSocket) {
 
         try {
@@ -39,7 +40,6 @@ public class Server {
         } catch (ClassNotFoundException e) { System.out.println(e); }
 
     }
-
     private void _handleHeartbeat(Packet clientPacket, InetAddress clientAddress, int clientPort) {
 
         // Update activeClients if needed
@@ -56,9 +56,14 @@ public class Server {
                 }
             }
 
-            // Add to active clients
+            // Add to active clients & send new active Client list to all clients
             if (isNewClient) {
                 _activeClients.add(newClient);
+                // Send active client lists on new thread
+                Thread sendActiveClientsThread = new Thread(() -> {
+                    _sendActiveClientsToAllActiveClients(Packet.typeToByte("RECOVERY"));
+                });
+                sendActiveClientsThread.start();
             }
 
             // Print active clients
@@ -72,7 +77,6 @@ public class Server {
         }
 
     }
-
     private void _handleFilelist(Packet clientPacket, InetAddress clientAddress, int clientPort) {
 
         // Update file listing
@@ -96,6 +100,43 @@ public class Server {
         System.out.println();
     }
 
+    // Sending to Clients
+    private void _sendActiveClientsToAllActiveClients(byte recoveryOrFailureType) {
+        synchronized (_activeClients) {
+
+            // Convert activeClients to string and then bytes for transmission
+            StringBuilder buildClientString = new StringBuilder();
+            for (ClientInfo client : _activeClients) {
+                buildClientString.append(client.toString()).append(",");
+            }
+            String activeClientsAsString = buildClientString.toString();
+            byte[] activeClientsBytes = activeClientsAsString.getBytes();
+
+            for (ClientInfo client : _activeClients) {
+                Packet packet = new Packet();
+                packet.setVersion((byte) 1);
+                packet.setType(recoveryOrFailureType);
+                packet.setNodeID((short) -1); // -1 for Server ID
+                packet.setTime(System.currentTimeMillis());
+                packet.setLength(activeClientsBytes.length);
+                packet.setData(activeClientsBytes);
+
+                _sendPacketToClient(packet, client);
+            }
+        }
+    }
+    private void _sendPacketToClient(Packet packet, ClientInfo client) {
+
+        System.out.println("Sending packet to client: " + client);
+        try {
+        DatagramPacket sendPacket = new DatagramPacket(packet.toBytes(), packet.toBytes().length,
+                                                        client.getIpAddress(), client.getPort());
+        serverSocket.send(sendPacket);
+        } catch (IOException e) { System.out.println("Error sending packet to Client: " + e); }
+
+    }
+
+    // Server Functions
     private void _monitorClientFailures() {
 
         try {
@@ -112,6 +153,12 @@ public class Server {
                         System.out.println("Detected client failure: " + client);
                         // Remove clent from acitve clients
                         it.remove();
+
+                        // Send updated client list to all clients
+                        Thread sendActiveClientsToAllClientsThread = new Thread(() -> {
+                            _sendActiveClientsToAllActiveClients(Packet.typeToByte("FAILURE"));
+                        });
+                        sendActiveClientsToAllClientsThread.start();
                     }
                 }
             }
@@ -120,7 +167,6 @@ public class Server {
     } catch (InterruptedException e) { System.out.println("monitorClientFailuresThread interrupred: " + e.getMessage()); }
 
     }
-
     private void _listen() throws IOException {
         while (true) {
 

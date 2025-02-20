@@ -9,9 +9,10 @@ import java.text.SimpleDateFormat;
 import java.util.TimeZone;
 import java.util.Date;
 
+// Protocol
 public class Packet implements Serializable {
 
-    // Implements Serializable to conver to bytes
+    // Implements Serializable to convert to bytes
 
     // version  1 byte   protocol version
     // type     1 byte   message type

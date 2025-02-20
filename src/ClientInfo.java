@@ -4,6 +4,7 @@ import java.util.Date;
 import java.util.Objects;
 import java.util.TimeZone;
 
+// Class for storing and managing active Client info (each item in activeClients list)
 public class ClientInfo {
 
     private InetAddress _ipAddress;
@@ -16,7 +17,7 @@ public class ClientInfo {
         this._lastHeartbeatTime = lastHeartBeatTime;
     }
 
-    // Getters & Setters (ChatGPT)
+    // Getters & Setters
     public InetAddress getIpAddress() { return _ipAddress; }
     public int getPort() { return _port; }
     public long getLastHeartbeatTime() { return _lastHeartbeatTime; }
@@ -35,11 +36,6 @@ public class ClientInfo {
     }
 
     // Formatting & Printing
-    @Override
-    public String toString() {
-        return String.format("%s:%d:%d", _ipAddress.getHostAddress(), _port, _lastHeartbeatTime);
-    }
-    
     public String getFormattedLastHeartbeatTime() {
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
         sdf.setTimeZone(TimeZone.getDefault());
@@ -58,6 +54,10 @@ public class ClientInfo {
 
             return new ClientInfo(ip, port, lastHeartbeat);
         } catch (Exception e) { System.out.println("Error deserializing ClientInfo: " + e.getMessage()); return null; }
+    }
+    @Override
+    public String toString() {
+        return String.format("%s:%d:%d", _ipAddress.getHostAddress(), _port, _lastHeartbeatTime);
     }
 
     // For use as HashMap key

@@ -10,11 +10,13 @@ public class ClientInfo {
     private InetAddress _ipAddress;
     private int _port;
     private long _lastHeartbeatTime;
+    private short _nodeID;
 
-    public ClientInfo(InetAddress ipAddress, int port, long lastHeartBeatTime) {
+    public ClientInfo(InetAddress ipAddress, int port, long lastHeartBeatTime, short nodeID) {
         this._ipAddress = ipAddress;
         this._port = port;
         this._lastHeartbeatTime = lastHeartBeatTime;
+        this._nodeID = nodeID;
     }
 
     // Getters & Setters
@@ -22,6 +24,7 @@ public class ClientInfo {
     public int getPort() { return _port; }
     public long getLastHeartbeatTime() { return _lastHeartbeatTime; }
     public void updateLastHeartbeat(long time) { this._lastHeartbeatTime = time; }
+    public short getNodeID() { return _nodeID; }
 
     // Comparison
     @Override
@@ -46,18 +49,19 @@ public class ClientInfo {
     public static ClientInfo fromString(String data) {
         try {
             String[] parts = data.split(":");
-            if (parts.length != 3) { return null; }
+            if (parts.length != 4) { return null; }
 
             InetAddress ip = InetAddress.getByName(parts[0]);
             int port = Integer.parseInt(parts[1]);
             long lastHeartbeat = Long.parseLong(parts[2]);
+            short nodeID = Short.parseShort(parts[3]);
 
-            return new ClientInfo(ip, port, lastHeartbeat);
+            return new ClientInfo(ip, port, lastHeartbeat, nodeID);
         } catch (Exception e) { System.out.println("Error deserializing ClientInfo: " + e.getMessage()); return null; }
     }
     @Override
     public String toString() {
-        return String.format("%s:%d:%d", _ipAddress.getHostAddress(), _port, _lastHeartbeatTime);
+        return String.format("%s:%d:%d:%d", _ipAddress.getHostAddress(), _port, _lastHeartbeatTime, _nodeID);
     }
 
     // For use as HashMap key

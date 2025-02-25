@@ -1,10 +1,17 @@
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.commons.io.FileUtils;
 
 public class Server {
  
@@ -12,6 +19,7 @@ public class Server {
 
     private ArrayList<ClientInfo> _activeClients;
     private HashMap<ClientInfo, ArrayList<String>> _activeClientFileListings;
+    private HashMap<ClientInfo, HashMap<String, byte[]>> _activeClientFileContents;
 
     // Handling Client Packets
     private void _handleClient(DatagramPacket recvPacket, DatagramSocket serverSocket) {
@@ -32,8 +40,10 @@ public class Server {
                 _handleHeartbeat(clientPacket, clientAddress, clientPort);
             } else if (clientPacket.getType() == Packet.typeToByte("FILELIST")) {
                 _handleFilelist(clientPacket, clientAddress, clientPort);
+            } else if (clientPacket.getType() == Packet.typeToByte("FILECONTENT")) {
+                _handleFileContents(clientPacket, clientAddress, clientPort);
             } else {
-
+                System.out.println("Unknown Packet type");
             }
 
         } catch (IOException e) { System.out.println(e);
@@ -43,7 +53,8 @@ public class Server {
     private void _handleHeartbeat(Packet clientPacket, InetAddress clientAddress, int clientPort) {
 
         // Update activeClients if needed
-        ClientInfo newClient = new ClientInfo(clientAddress, clientPort, clientPacket.getTime());
+        short nodeID = clientPacket.getNodeID();
+        ClientInfo newClient = new ClientInfo(clientAddress, clientPort, clientPacket.getTime(), nodeID);
         boolean isNewClient = true;
         synchronized (_activeClients) { // Safely modify activeClients list (ChatGPT suggested this)
             if (_activeClients.size() > 0) {
@@ -66,6 +77,11 @@ public class Server {
                 sendActiveClientsThread.start();
             }
 
+            // Create directory if new client
+            if (isNewClient) {
+                _makeClientDirectory(newClient);
+            }
+
             // Print active clients
             if (_activeClients.size() > 0) {
                 System.out.println("\nActive Clients");
@@ -82,11 +98,18 @@ public class Server {
         // Update file listing
         // Client only sends file listing when a file has been created or deleted so no need to check
         // if this listing is different, it always will be different
-        ClientInfo client = new ClientInfo(clientAddress, clientPort, clientPacket.getTime());
+        ClientInfo client = new ClientInfo(clientAddress, clientPort, clientPacket.getTime(), clientPacket.getNodeID());
+        
+        _makeClientDirectory(client);
+
         String filelistString = new String(clientPacket.getData(), StandardCharsets.UTF_8);
         ArrayList<String> fileList = new ArrayList<>(Arrays.asList(filelistString.split(",")));
 
-        _activeClientFileListings.put(client, fileList);
+        synchronized (_activeClientFileListings) {
+            _activeClientFileListings.put(client, fileList);
+        }
+
+        _updateClientFileListing(client, fileList);
 
         // Print File Listings
         System.out.println("All File Listings");
@@ -99,6 +122,150 @@ public class Server {
         }
         System.out.println();
     }
+    private void _handleFileContents(Packet clientPacket, InetAddress clientAddress, int clientPort) {
+
+        byte[] recvdData = clientPacket.getData();
+        if (recvdData == null || recvdData.length == 0) {
+            System.err.println("Recvd empty FILECONTENT packet");
+            return;
+        }
+        System.out.println("Recvd FILECONTENT packet, size: " + recvdData.length);
+
+        // ChatGPT
+        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(clientPacket.getData());
+            ObjectInputStream in = new ObjectInputStream(byteIn)) {
+
+                Object obj = in.readObject();
+                if (obj == null) { System.err.println("Deserialized obj is null"); return; }
+                System.out.println("Deserialized object type: " + obj.getClass().getSimpleName());
+
+                if (!(obj instanceof HashMap<?, ?>)) { System.err.println("Error: Expected HashMap<String, byte[]> but recieved: " + obj.getClass().getSimpleName()); return;}
+                
+                if (obj instanceof HashMap<?,?>) {
+                    HashMap<?, ?> rawMap = (HashMap<?, ?>) obj;
+
+                    HashMap<String, byte[]> fileContents = new HashMap<>();
+                    System.out.println("Extracting entries from HashMap... (size " + rawMap.size() + ")");
+                    
+                    for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                        if (entry.getKey() == null || entry.getValue() == null) {
+                            System.err.println("Null entry found in received fileContents map: Key=" + entry.getKey());
+                            return;
+                        } 
+                        if (!(entry.getKey() instanceof String) || !(entry.getValue() instanceof byte[])) {
+                            System.err.println("Invalid entry type in fileContents: Key=" + entry.getKey() + ", Value Type=" + entry.getValue().getClass().getSimpleName());
+                            return;
+                        }
+                        if (entry.getKey() instanceof String && entry.getValue() instanceof byte[]) {
+                            fileContents.put((String) entry.getKey(), (byte[]) entry.getValue());
+                        } else {
+                            System.err.println("Invalid key/value type in fileContents map");
+                            return;
+                        }
+                    }
+
+                    ClientInfo client = new ClientInfo(clientAddress, clientPort, clientPacket.getTime(), clientPacket.getNodeID());
+                    _activeClientFileContents.put(client, fileContents);
+
+                    _writeFilesFromClient(client);
+
+                } else {
+                    System.err.println("Error: recvd invalid file contents format");
+                }
+            } catch (IOException | ClassNotFoundException e) { System.err.println("Error reading file contents from client: " + e.getMessage());
+        }
+
+    }
+
+    // Handling Files
+    private void _makeClientDirectory(ClientInfo client) {
+        String nodeIDString = String.valueOf(client.getNodeID());
+        String clientDirectoryPath = "Server" + File.separator + nodeIDString;
+        if (Files.notExists(Paths.get(clientDirectoryPath))) { // If directory for client does not exist then create it
+            boolean dirCreated = new File(clientDirectoryPath).mkdirs();
+            if (!dirCreated) {
+                System.out.println("Error creating dir: " + clientDirectoryPath);
+            } else {
+                System.out.println("Client directory created: " + clientDirectoryPath);
+            }
+        }
+    }
+    private void _deleteClientDirectory(ClientInfo client) {
+        String nodeIDString = String.valueOf(client.getNodeID());
+        String clientDirectoryPath = "Server" + File.separator + nodeIDString;
+        try { 
+        FileUtils.deleteDirectory(new File(clientDirectoryPath)); 
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+    private void _createClientFiles(ClientInfo client, ArrayList<String> clientFileListing) {
+        // Make sure filesystem reflects file listings
+        String nodeIDString = String.valueOf(client.getNodeID());
+        String clientDirectoryPath = "Server" + File.separator + nodeIDString;
+        for (String filename : clientFileListing) {
+            String filePathString = clientDirectoryPath + File.separator + filename;
+            File file = new File(filePathString);
+            if (!file.exists()) {
+                try { file.createNewFile(); } catch (IOException e) { System.out.println(e.getMessage()); }
+            }
+        }
+    }
+    private void _updateClientFileListing(ClientInfo client, ArrayList<String> clientFileListing) {
+
+        // Get Current Files
+        Set<String> currentFiles = new HashSet<String>();
+        Set<String> updatedFiles = new HashSet<String>();
+        String nodeIDString = String.valueOf(client.getNodeID());
+        String clientDirectoryPath = "Server" + File.separator + nodeIDString;
+        File clientDirectory = new File(clientDirectoryPath);
+        
+        boolean clientDirectoryEmpty = false;
+        if (clientDirectory.listFiles() == null) {
+            System.out.println("Null listFiles _updateClientFileListing");
+            clientDirectoryEmpty = true;
+        } else {
+            for (File file : clientDirectory.listFiles()) {
+                currentFiles.add(file.getName());
+            }
+        }
+
+        // Add New Files
+        for (String file : clientFileListing) {
+            updatedFiles.add(file);
+            if (!currentFiles.contains(file)) {
+                File newFile = new File(clientDirectory,file);
+                try {
+                    newFile.createNewFile();
+                } catch (IOException e) { System.out.println("Error creating file: " + clientDirectory + File.separator + file + "Error: " + e.getMessage()); }
+            }
+        }
+
+        if (clientDirectoryEmpty) { return; } // No need to delete files, directory was empty
+
+        // Delete Deleted Files
+        for (String file : currentFiles) {
+            if (!updatedFiles.contains(file)) {
+                File deleteFile = new File(clientDirectory,file);
+                deleteFile.delete();
+            }
+        }
+
+    }
+
+    private void _writeFilesFromClient(ClientInfo client) {
+        // Write file contents to server copy
+        HashMap<String, byte[]> clientFiles = _activeClientFileContents.get(client);
+        for (String filename : clientFiles.keySet()) {
+            byte[] fileContent = clientFiles.get(filename);
+
+            // Replace file with updated contents
+            String path = "Server" + File.separator + String.valueOf(client.getNodeID()) + File.separator + filename;
+            try (FileOutputStream fos = new FileOutputStream(path)) {
+                fos.write(fileContent);
+            } catch (IOException e) { System.out.println(e.getMessage()); return; }
+
+        }
+    }
+    
 
     // Sending to Clients
     private void _sendActiveClientsToAllActiveClients(byte recoveryOrFailureType) {
@@ -170,7 +337,7 @@ public class Server {
     private void _listen() throws IOException {
         while (true) {
 
-            byte[] recvBuffer = new byte[1024];
+            byte[] recvBuffer = new byte[65507]; // Max UDP packet size
             DatagramPacket recvPacket = new DatagramPacket(recvBuffer, recvBuffer.length);
             serverSocket.receive(recvPacket);
             
@@ -203,6 +370,7 @@ public class Server {
 
         _activeClients = new ArrayList<>();
         _activeClientFileListings = new HashMap<ClientInfo, ArrayList<String>>();
+        _activeClientFileContents = new HashMap<>();
         _startServer(serverPort);
     }
 

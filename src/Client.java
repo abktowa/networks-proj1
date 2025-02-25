@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.*;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 
@@ -22,6 +23,7 @@ public class Client {
 
     // Client Data
     private ArrayList<String> _fileListing;
+    private HashMap<String, byte[]> _fileContents;
 
     // Data from Server
     private ArrayList<ClientInfo> _allActiveClients;
@@ -199,7 +201,8 @@ public class Client {
         WatchService watchService = FileSystems.getDefault().newWatchService();
         directoryPath.register(watchService,
                                 StandardWatchEventKinds.ENTRY_CREATE,
-                                StandardWatchEventKinds.ENTRY_DELETE);
+                                StandardWatchEventKinds.ENTRY_DELETE,
+                                StandardWatchEventKinds.ENTRY_MODIFY); // Create / Delete for Listing, Modify for Contents
         
         while (true) {
             WatchKey key = watchService.take();
@@ -208,6 +211,8 @@ public class Client {
                     _sendFileListing();
                 } else if  (event.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
                     _sendFileListing();
+                } else if (event.kind() == StandardWatchEventKinds.ENTRY_MODIFY) {
+                    _sendFileContents();
                 }
             }
             key.reset();
@@ -221,7 +226,6 @@ public class Client {
         ArrayList<String> fileListing = new ArrayList<String>();
         File[] files = new File(String.valueOf(_nodeID)).listFiles();
         if (files != null) { // if dir is not empty
-            // TODO: handle empty directory, should still send empty array to Server
             for (File filename : files) {
                 fileListing.add(filename.getName());
             }
@@ -241,6 +245,47 @@ public class Client {
 
         _sendPacketToServer(packet);
         System.out.println("Sending file listing");
+    }
+    private void _sendFileContents() {
+        try {
+        HashMap<String, byte[]> fileContents = new HashMap<>();
+        File[] files = new File(String.valueOf(_nodeID)).listFiles();
+        if (files != null) {
+            for (File filename : files) {
+                if (filename.getName().startsWith(".")) { continue; } // ignore system files
+                byte[] fileContent;
+                    fileContent = Files.readAllBytes(filename.toPath());
+                    fileContents.put(filename.getName(), fileContent);
+            }
+        }
+
+        if (fileContents.isEmpty()) {
+            System.err.println("No files to send");
+            return;
+        }
+        _fileContents = fileContents;
+
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutputStream out = new ObjectOutputStream(byteOut);
+        out.writeObject(_fileContents);
+        out.flush();
+        out.reset();
+
+        byte[] fileContentAsBytes = byteOut.toByteArray();
+        System.out.println("Serialized FILECONTENT packet size: " + fileContentAsBytes.length + " bytes");
+
+        Packet packet = new Packet();
+        packet.setVersion((byte) 1);
+        packet.setType(Packet.typeToByte("FILECONTENT"));
+        packet.setNodeID(_nodeID);
+        packet.setTime(System.currentTimeMillis());
+        packet.setLength(fileContentAsBytes.length);
+        packet.setData(fileContentAsBytes);
+
+        _sendPacketToServer(packet);
+        System.out.println("Sent file contents to server");
+
+        } catch (IOException e) { System.out.println(e.getMessage()); }
     }
     
     // Setup

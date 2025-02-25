@@ -77,6 +77,12 @@ public class Packet implements Serializable {
                 return (byte) 3;
             case "FILELIST":
                 return (byte) 4;
+            case "FILEUPDATE" :
+                return (byte) 5;
+            case "FILEDELETE" :
+                return (byte) 6;
+            case "FILECONTENT" :
+                return (byte) 7;
             default:
                 return (byte) 0;
         }
@@ -93,6 +99,12 @@ public class Packet implements Serializable {
                 return "RECOVERY";
             case (byte) 4 :
                 return "FILELIST";
+            case (byte) 5 :
+                return "FILEUPDATE";
+            case (byte) 6 :
+                return "FILEDELETE";
+            case (byte) 7 :
+                return "FILECONTENT";
             default :
                 return String.format("Unknown Byte: %d", (int) type);
         }

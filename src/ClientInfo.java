@@ -25,6 +25,7 @@ public class ClientInfo {
     public long getLastHeartbeatTime() { return _lastHeartbeatTime; }
     public void updateLastHeartbeat(long time) { this._lastHeartbeatTime = time; }
     public short getNodeID() { return _nodeID; }
+    public String getNodeIDAsString() { return String.valueOf(_nodeID); }
 
     // Comparison
     @Override

@@ -1,8 +1,6 @@
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -10,8 +8,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.commons.io.FileUtils;
 
 public class Server {
  
@@ -179,35 +175,12 @@ public class Server {
 
     // Handling Files
     private void _makeClientDirectory(ClientInfo client) {
-        String nodeIDString = String.valueOf(client.getNodeID());
-        String clientDirectoryPath = "Server" + File.separator + nodeIDString;
-        if (Files.notExists(Paths.get(clientDirectoryPath))) { // If directory for client does not exist then create it
-            boolean dirCreated = new File(clientDirectoryPath).mkdirs();
-            if (!dirCreated) {
-                System.out.println("Error creating dir: " + clientDirectoryPath);
-            } else {
-                System.out.println("Client directory created: " + clientDirectoryPath);
-            }
-        }
+        String clientDirectory = "Server" + File.separator + client.getNodeIDAsString();
+        FileHelper.createDirectory(clientDirectory);
     }
     private void _deleteClientDirectory(ClientInfo client) {
-        String nodeIDString = String.valueOf(client.getNodeID());
-        String clientDirectoryPath = "Server" + File.separator + nodeIDString;
-        try { 
-        FileUtils.deleteDirectory(new File(clientDirectoryPath)); 
-        } catch (Exception e) { e.printStackTrace(); }
-    }
-    private void _createClientFiles(ClientInfo client, ArrayList<String> clientFileListing) {
-        // Make sure filesystem reflects file listings
-        String nodeIDString = String.valueOf(client.getNodeID());
-        String clientDirectoryPath = "Server" + File.separator + nodeIDString;
-        for (String filename : clientFileListing) {
-            String filePathString = clientDirectoryPath + File.separator + filename;
-            File file = new File(filePathString);
-            if (!file.exists()) {
-                try { file.createNewFile(); } catch (IOException e) { System.out.println(e.getMessage()); }
-            }
-        }
+        String clientDirectoryPath = "Server" + File.separator + client.getNodeIDAsString();
+        FileHelper.deleteDirectory(clientDirectoryPath);
     }
     private void _updateClientFileListing(ClientInfo client, ArrayList<String> clientFileListing) {
 
@@ -250,19 +223,14 @@ public class Server {
         }
 
     }
-
     private void _writeFilesFromClient(ClientInfo client) {
         // Write file contents to server copy
         HashMap<String, byte[]> clientFiles = _activeClientFileContents.get(client);
-        for (String filename : clientFiles.keySet()) {
-            byte[] fileContent = clientFiles.get(filename);
+        if (clientFiles == null) { return; }
 
-            // Replace file with updated contents
-            String path = "Server" + File.separator + String.valueOf(client.getNodeID()) + File.separator + filename;
-            try (FileOutputStream fos = new FileOutputStream(path)) {
-                fos.write(fileContent);
-            } catch (IOException e) { System.out.println(e.getMessage()); return; }
-
+        String clientDirectory = "Server" + File.separator + client.getNodeIDAsString();
+        for (Map.Entry<String, byte[]> entry : clientFiles.entrySet()) {
+            FileHelper.writeFile(clientDirectory + File.separator + entry.getKey(), entry.getValue());
         }
     }
     
@@ -320,6 +288,9 @@ public class Server {
                         System.out.println("Detected client failure: " + client);
                         // Remove clent from acitve clients
                         it.remove();
+
+                        // Remove client directory
+                        _deleteClientDirectory(client);
 
                         // Send updated client list to all clients
                         Thread sendActiveClientsToAllClientsThread = new Thread(() -> {

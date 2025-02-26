@@ -35,14 +35,10 @@ public class Client {
     private final ReentrantLock printLock = new ReentrantLock();
 
     // Setup
-    private boolean _establishConnection(String serverAddr, int serverPort) {
+    private boolean _establishConnection(InetAddress serverAddr, int serverPort) {
 
         try {
             socket = new DatagramSocket();
-            serverAddress = InetAddress.getByName(serverAddr);
-            this.serverPort = serverPort;
-            System.out.println("Connected to Server");
-        } catch (UnknownHostException u) { System.out.println(u); return false;
         } catch (IOException i) { System.out.println(i); return false; }
 
         return true;
@@ -227,9 +223,7 @@ public class Client {
         ObjectInputStream in = new ObjectInputStream(byteIn);
         Object obj = in.readObject();
 
-        if (!(obj instanceof HashMap<?, ?>)) { System.err.println("Error: Expected HashMap<String, byte[]> but recieved: " + obj.getClass().getSimpleName()); return;} else {
-            System.out.println("obj is hash map");
-        }
+        if (!(obj instanceof HashMap<?, ?>)) { System.err.println("Error: Expected HashMap<String, byte[]> but recieved: " + obj.getClass().getSimpleName()); return;}
         HashMap<?,?> rawMap = (HashMap<?,?>) obj;
         HashMap<ClientInfo, ArrayList<String>> fileListings = new HashMap<>();
         
@@ -393,14 +387,20 @@ public class Client {
     }
 
     // Setup
-    public Client(String serverAddr, int serverPort, short nodeID) {
+    public Client() {
 
-        _nodeID = nodeID;
+        // Load Config & Set Node ID
+        _loadConfig();
+        if (serverAddress == null || serverPort == 0) { System.err.println("Server IP/Port not set in config"); return; }
+        _setNodeID();
+
+        System.setOut(new ClientPrintStream(System.out, _nodeID));
+
         _activeClientFileListings = new HashMap<>();
         _activeClientFileContent = new HashMap<>();
 
         // Establish connection
-        boolean conn = _establishConnection(serverAddr, serverPort);
+        boolean conn = _establishConnection(serverAddress, serverPort);
         if (!conn) { System.out.println("Connection failed"); return; }
 
         _startClient();
@@ -452,11 +452,42 @@ public class Client {
         } catch (IOException e) { System.out.println(e); }
 
     }
+    private void _loadConfig() {
+        try (BufferedReader br = new BufferedReader(new FileReader("config.txt"))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split("=");
+                if (parts.length == 2) {
+                    if (parts[0].equals("SERVER_IP")) {
+                        String serverIP = parts[1].trim();
+                        serverAddress = InetAddress.getByName(serverIP);
+                    } else if (parts[0].equals("SERVER_PORT")) {
+                        serverPort = Integer.parseInt(parts[1].trim());
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error reading config file: " + e.getMessage());
+        }
+    }
+    private void _setNodeID() {
+        
+        // ChatGPT
+        try {
+        URL whatismyip = new URL("http://checkip.amazonaws.com");
+        BufferedReader in = new BufferedReader(new InputStreamReader(whatismyip.openStream()));
+        String ip = in.readLine();
+        String[] ipParts = ip.split("\\.");
+        int part3 = Integer.parseInt(ipParts[2]); // Third octet
+        int part4 = Integer.parseInt(ipParts[3]); // Fourth octet
+        _nodeID = (short) ((part3 << 8) | part4);
+        } catch (IOException e) { System.out.println("_setNodeID error"); _nodeID = 1;}
+    }
     
     // Printing
     public void printActiveClientFilelisting() {
         synchronized (printLock) {
-        System.out.println("\n========== Active Client File Listings ==========");
+        System.out.println("========== Active Client File Listings ==========");
     
         if (_activeClientFileListings == null || _activeClientFileListings.isEmpty()) {
             System.out.println("No active clients with files.");
@@ -465,7 +496,7 @@ public class Client {
                 ClientInfo client = entry.getKey();
                 ArrayList<String> fileList = entry.getValue();
 
-                System.out.println("\nClient: " + client);
+                System.out.println("Client: " + client);
                 if (fileList.isEmpty()) {
                     System.out.println("   No files available.");
                 } else {
@@ -480,7 +511,7 @@ public class Client {
     }
     public void printActiveClients() {
         synchronized (printLock) {
-        System.out.println("\n========== Active Clients ==========");
+        System.out.println("========== Active Clients ==========");
     
         if (_allActiveClients == null || _allActiveClients.isEmpty()) {
             System.out.println("No active clients.");
@@ -495,12 +526,12 @@ public class Client {
             }
         }
     
-        System.out.println("====================================\n");
+        System.out.println("====================================");
         }
     }
     public void printActiveClientFileContent() {
         synchronized (printLock) {
-            System.out.println("\n========== Active Client File Contents ==========");
+            System.out.println("========== Active Client File Contents ==========");
     
             if (_activeClientFileContent == null || _activeClientFileContent.isEmpty()) {
                 System.out.println("No active clients with file contents.");
@@ -509,7 +540,7 @@ public class Client {
                     ClientInfo client = entry.getKey();
                     HashMap<String, byte[]> fileContents = entry.getValue();
     
-                    System.out.println("\nClient: " + client);
+                    System.out.println("Client: " + client);
                     System.out.printf("   Last Heartbeat: %s%n", client.getFormattedLastHeartbeatTime());
     
                     if (fileContents == null || fileContents.isEmpty()) {
@@ -526,7 +557,62 @@ public class Client {
                 }
             }
     
-            System.out.println("=================================================\n");
+            System.out.println("=================================================");
+        }
+    }
+
+    // ChatGPT
+    private class ClientPrintStream extends PrintStream {
+        private final short nodeID;
+        private boolean newLine = true; // Tracks if a new line has started
+    
+        public ClientPrintStream(OutputStream out, short nodeID) {
+            super(out, true);
+            this.nodeID = nodeID;
+        }
+    
+        @Override
+        public void println() { // Handle empty println()
+            super.println();
+            newLine = true; // Ensure prefix prints on next line
+        }
+    
+        @Override
+        public void println(String message) {
+            if (message == null || message.isEmpty()) { // Handle empty/null lines
+                super.println();
+                newLine = true;
+                return;
+            }
+            if (newLine && !message.startsWith("[CLIENT")) { // Prevent duplicate prefix
+                message = "[CLIENT " + nodeID + "] " + message;
+            }
+            super.println(message);
+            newLine = true; // Ensure next line gets a prefix
+        }
+    
+        @Override
+        public void print(String message) {
+            if (message == null) { // Handle null messages
+                super.print("");
+                return;
+            }
+            if (newLine && !message.startsWith("[CLIENT")) { // Add prefix only at the start of a line
+                message = "[CLIENT " + nodeID + "] " + message;
+            }
+            super.print(message);
+            newLine = message.endsWith("\n"); // Detect if the message ends a line
+        }
+    
+        @Override
+        public PrintStream printf(String format, Object... args) {
+            String message = String.format(format, args);
+            if (newLine && !message.startsWith("[CLIENT")) { // Prevent duplicate prefix
+                message = "[CLIENT " + nodeID + "] " + message;
+            }
+            super.print(message);
+            newLine = message.endsWith("\n"); // Detect if the message ends a line
+            return this;
         }
     }
     

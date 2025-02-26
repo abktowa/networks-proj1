@@ -32,6 +32,10 @@ public class Client {
     private HashMap<ClientInfo, ArrayList<String>> _activeClientFileListings; // TODO: Class for Filelist
     private HashMap<ClientInfo, HashMap<String, byte[]>> _activeClientFileContent;
 
+    // Filesystem
+    private File homeDir;
+    private File downloadedClientFiles;
+
     private final ReentrantLock printLock = new ReentrantLock();
 
     // Setup
@@ -280,7 +284,7 @@ public class Client {
         _sendFileListing();
         // https://www.geeksforgeeks.org/watch-a-directory-for-changes-in-java/
         try {
-        Path directoryPath = Paths.get(String.valueOf(_nodeID));
+        Path directoryPath = Paths.get(homeDir.getAbsolutePath());
 
         WatchService watchService = FileSystems.getDefault().newWatchService();
         directoryPath.register(watchService,
@@ -308,7 +312,8 @@ public class Client {
 
         // Get file listing and put in array
         ArrayList<String> fileListing = new ArrayList<String>();
-        File[] files = new File(String.valueOf(_nodeID)).listFiles();
+        File[] files = homeDir.listFiles();
+
         if (files != null) { // if dir is not empty
             for (File filename : files) {
                 if (filename.getName().startsWith(".") || filename.isDirectory()) { continue; }
@@ -334,7 +339,7 @@ public class Client {
     private void _sendFileContents() {
         try {
         HashMap<String, byte[]> fileContents = new HashMap<>();
-        File[] files = new File(String.valueOf(_nodeID)).listFiles();
+        File[] files = homeDir.listFiles();
         if (files != null) {
             for (File filename : files) {
                 if (filename.getName().startsWith(".")) { continue; } // ignore system files
@@ -376,9 +381,8 @@ public class Client {
     // Filesystem
     private void _writeFilesFromClient(ClientInfo client, HashMap<String, byte[]> clientFiles) {
         
-        String thisClientNodeAsString = String.valueOf(_nodeID);
-        String clientDirectory =  thisClientNodeAsString + File.separator + "DownloadedFiles" + File.separator + client.getNodeIDAsString();
-        FileHelper.createDirectory(clientDirectory);
+        File clientDirectory = new File(downloadedClientFiles.getPath(), client.getNodeIDAsString());
+        FileHelper.createDirectory(clientDirectory.getAbsolutePath());
 
         for (String filename : clientFiles.keySet()) {
             String filePath = clientDirectory + File.separator + filename;
@@ -394,6 +398,16 @@ public class Client {
         if (serverAddress == null || serverPort == 0) { System.err.println("Server IP/Port not set in config"); return; }
         _setNodeID();
 
+        homeDir = new File(System.getProperty("user.home"), "Project1");
+        if (!homeDir.exists() && homeDir.mkdirs()) {
+            System.out.println("Created client home directory: " + homeDir.getAbsolutePath());
+        }
+    
+        downloadedClientFiles = new File(homeDir, "DownloadedClients");
+        if (!downloadedClientFiles.exists() && downloadedClientFiles.mkdirs()) {
+            System.out.println("Created downloaded client files directory: " + downloadedClientFiles.getAbsolutePath());
+        }
+        
         System.setOut(new ClientPrintStream(System.out, _nodeID));
 
         _activeClientFileListings = new HashMap<>();

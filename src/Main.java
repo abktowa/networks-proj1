@@ -76,13 +76,14 @@ public class Main {
             int part4 = Integer.parseInt(ipParts[3]); // Fourth octet
             nodeID = (short) ((part3 << 8) | part4);
             } catch (IOException e) { System.out.println("_setNodeID error"); nodeID = 1;}
+            
             // Create "home" directory for "node" and fill with 5 text files
-            final String dirPath = _createNodeFiles(nodeID);
+            //final String dirPath = _createNodeFiles(nodeID);
             // Make sure files are deleted even if SIGINT (ChatGPT)
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                // Delete "node" "files"
-                _deleteNodeDir(dirPath);
-            }));
+            //Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            //    // Delete "node" "files"
+            //    _deleteNodeDir(dirPath);
+            //}));
 
             Client client = new Client();
         

@@ -353,8 +353,8 @@ public class Server {
     private void _startServer(int serverPort) {
 
         try {
-            serverSocket = new DatagramSocket(serverPort);
-            System.out.println("Server started");
+            serverSocket = new DatagramSocket(50501, InetAddress.getByName("0.0.0.0"));
+            System.out.printf("Server started on port: %d",serverPort);
             
             // Monitor client disconnects/failures
             Thread monitorClientFailuresThread = new Thread(() -> {

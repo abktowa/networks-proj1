@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Server {
  
@@ -16,6 +17,8 @@ public class Server {
     private ArrayList<ClientInfo> _activeClients;
     private HashMap<ClientInfo, ArrayList<String>> _activeClientFileListings;
     private HashMap<ClientInfo, HashMap<String, byte[]>> _activeClientFileContents;
+
+    private final ReentrantLock printLock = new ReentrantLock();
 
     // Handling Client Packets
     private void _handleClient(DatagramPacket recvPacket, DatagramSocket serverSocket) {
@@ -79,13 +82,7 @@ public class Server {
             }
 
             // Print active clients
-            if (_activeClients.size() > 0) {
-                System.out.println("\nActive Clients");
-                for (ClientInfo activeClient : _activeClients) {
-                    System.out.println(activeClient);
-                }
-                System.out.println();
-            }
+            printActiveClients();
         }
 
     }
@@ -108,15 +105,10 @@ public class Server {
         _updateClientFileListing(client, fileList);
 
         // Print File Listings
-        System.out.println("All File Listings");
-        for (ClientInfo c : _activeClientFileListings.keySet()) {
-            ArrayList<String> fL = _activeClientFileListings.get(c);
-            System.out.println(c);
-            for (String f : fL) {
-                System.out.println("     " + f);
-            }
-        }
-        System.out.println();
+        printAllActiveClientFileListings();
+
+        // Send file listings to all clients
+        _sendFileListingsToAllActiveClients();
     }
     private void _handleFileContents(Packet clientPacket, InetAddress clientAddress, int clientPort) {
 
@@ -133,41 +125,30 @@ public class Server {
 
                 Object obj = in.readObject();
                 if (obj == null) { System.err.println("Deserialized obj is null"); return; }
-                System.out.println("Deserialized object type: " + obj.getClass().getSimpleName());
-
                 if (!(obj instanceof HashMap<?, ?>)) { System.err.println("Error: Expected HashMap<String, byte[]> but recieved: " + obj.getClass().getSimpleName()); return;}
                 
-                if (obj instanceof HashMap<?,?>) {
-                    HashMap<?, ?> rawMap = (HashMap<?, ?>) obj;
-
-                    HashMap<String, byte[]> fileContents = new HashMap<>();
-                    System.out.println("Extracting entries from HashMap... (size " + rawMap.size() + ")");
-                    
-                    for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
-                        if (entry.getKey() == null || entry.getValue() == null) {
-                            System.err.println("Null entry found in received fileContents map: Key=" + entry.getKey());
-                            return;
-                        } 
-                        if (!(entry.getKey() instanceof String) || !(entry.getValue() instanceof byte[])) {
-                            System.err.println("Invalid entry type in fileContents: Key=" + entry.getKey() + ", Value Type=" + entry.getValue().getClass().getSimpleName());
-                            return;
-                        }
-                        if (entry.getKey() instanceof String && entry.getValue() instanceof byte[]) {
-                            fileContents.put((String) entry.getKey(), (byte[]) entry.getValue());
-                        } else {
-                            System.err.println("Invalid key/value type in fileContents map");
-                            return;
-                        }
+                HashMap<?, ?> rawMap = (HashMap<?, ?>) obj;
+                HashMap<String, byte[]> fileContents = new HashMap<>();
+                
+                for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                    if (entry.getKey() == null || entry.getValue() == null) {
+                        System.err.println("Null entry found in received fileContents map: Key=" + entry.getKey());
+                        continue;
+                    } 
+                    if (!(entry.getKey() instanceof String) || !(entry.getValue() instanceof byte[])) {
+                        System.err.println("Invalid entry type in fileContents: Key=" + entry.getKey() + ", Value Type=" + entry.getValue().getClass().getSimpleName());
+                        continue;
                     }
-
-                    ClientInfo client = new ClientInfo(clientAddress, clientPort, clientPacket.getTime(), clientPacket.getNodeID());
-                    _activeClientFileContents.put(client, fileContents);
-
-                    _writeFilesFromClient(client);
-
-                } else {
-                    System.err.println("Error: recvd invalid file contents format");
+                    
+                    fileContents.put((String) entry.getKey(), (byte[]) entry.getValue());
                 }
+
+                ClientInfo client = new ClientInfo(clientAddress, clientPort, clientPacket.getTime(), clientPacket.getNodeID());
+                _activeClientFileContents.put(client, fileContents);
+                _writeFilesFromClient(client);
+
+                _sendFileContentsToAllActiveClients();
+                
             } catch (IOException | ClassNotFoundException e) { System.err.println("Error reading file contents from client: " + e.getMessage());
         }
 
@@ -234,8 +215,49 @@ public class Server {
         }
     }
     
-
     // Sending to Clients
+    private void _sendFileContentsToAllActiveClients() {
+        for (ClientInfo client : _activeClients) {
+
+            Packet packet = new Packet();
+            packet.setVersion((byte) 1);
+            packet.setType(Packet.typeToByte("FILECONTENT"));
+            packet.setNodeID((short) -1);
+            packet.setTime(System.currentTimeMillis());
+
+            if (_activeClientFileContents == null || _activeClientFileContents.isEmpty()) {
+                System.err.println("Error: _activeClientFileContents is empty"); return;
+            }
+            byte[] fileContentAsBytes = _hashMapToBytes(_activeClientFileContents);
+
+            packet.setLength(fileContentAsBytes.length);
+            packet.setData(fileContentAsBytes);
+
+            System.out.println("Sending file contents to all active clients");
+            _sendPacketToClient(packet, client);
+        }
+    }
+    private void _sendFileListingsToAllActiveClients() {
+        for (ClientInfo client : _activeClients) {
+            
+            Packet packet = new Packet();
+            packet.setVersion((byte) 1);
+            packet.setType(Packet.typeToByte("FILELIST"));
+            packet.setNodeID((short) -1);
+            packet.setTime(System.currentTimeMillis());
+
+            if (_activeClientFileListings == null || _activeClientFileListings.isEmpty()) {
+                System.err.println("Error: _activeClientFileListings is empty"); return;
+            }
+            byte[] fileListingsBytes = _hashMapToBytes(_activeClientFileListings);
+
+            packet.setLength(fileListingsBytes.length);
+            packet.setData(fileListingsBytes);
+
+            _sendPacketToClient(packet, client);
+
+        }
+    }
     private void _sendActiveClientsToAllActiveClients(byte recoveryOrFailureType) {
         synchronized (_activeClients) {
 
@@ -292,6 +314,14 @@ public class Server {
                         // Remove client directory
                         _deleteClientDirectory(client);
 
+                        // Delete Client fileListing and fileContent
+                        synchronized (_activeClientFileListings) {
+                        _activeClientFileListings.remove(client);
+                        }
+                        synchronized (_activeClientFileContents) {
+                        _activeClientFileContents.remove(client);
+                        }
+
                         // Send updated client list to all clients
                         Thread sendActiveClientsToAllClientsThread = new Thread(() -> {
                             _sendActiveClientsToAllActiveClients(Packet.typeToByte("FAILURE"));
@@ -345,4 +375,71 @@ public class Server {
         _startServer(serverPort);
     }
 
+    // Helper
+    private byte[] _hashMapToBytes(HashMap<?,?> hashMap) {
+        
+        try {
+            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+            ObjectOutputStream out = new ObjectOutputStream(byteOut);
+            out.writeObject(hashMap);
+            out.flush();
+            out.reset();
+            return byteOut.toByteArray();
+        } catch (IOException e) {
+            System.err.println(e.getMessage());
+        }
+        return new byte[0];
+    }
+
+    // Printing
+    private void printActiveClients() {
+        synchronized (printLock) {
+        System.out.println("\n========== Active Clients ==========");
+    
+        if (_activeClients == null || _activeClients.isEmpty()) {
+            System.out.println("No active clients.");
+        } else {
+            for (int i = 0; i < _activeClients.size(); i++) {
+                ClientInfo client = _activeClients.get(i);
+                System.out.printf("%d. Client ID: %d%n", i + 1, client.getNodeID());
+                System.out.printf("   IP Address: %s%n", client.getIpAddress().getHostAddress());
+                System.out.printf("   Port: %d%n", client.getPort());
+                System.out.printf("   Last Heartbeat: %s%n", client.getFormattedLastHeartbeatTime());
+                System.out.println("------------------------------------");
+            }
+        }
+    
+        System.out.println("====================================\n");
+        }
+    }
+    private void printAllActiveClientFileListings() {
+        synchronized (printLock) {
+        System.out.println("\n========== Active Client File Listings ==========");
+    
+        if (_activeClientFileListings == null || _activeClientFileListings.isEmpty()) {
+            System.out.println("No active clients with files.");
+        } else {
+            for (Map.Entry<ClientInfo, ArrayList<String>> entry : _activeClientFileListings.entrySet()) {
+                ClientInfo client = entry.getKey();
+                ArrayList<String> fileList = entry.getValue();
+    
+                System.out.println("\nClient: " + client);
+                System.out.printf("   Last Heartbeat: %s%n", client.getFormattedLastHeartbeatTime());
+    
+                if (fileList == null || fileList.isEmpty()) {
+                    System.out.println("   No files available.");
+                } else {
+                    System.out.println("   Files:");
+                    for (int i = 0; i < fileList.size(); i++) {
+                        System.out.printf("     %d. %s%n", i + 1, fileList.get(i));
+                    }
+                }
+                System.out.println("------------------------------------");
+            }
+        }
+    
+        System.out.println("============================================\n");
+    }
+    }
+    
 }

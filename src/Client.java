@@ -3,6 +3,8 @@ import java.net.*;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 
@@ -27,6 +29,10 @@ public class Client {
 
     // Data from Server
     private ArrayList<ClientInfo> _allActiveClients;
+    private HashMap<ClientInfo, ArrayList<String>> _activeClientFileListings; // TODO: Class for Filelist
+    private HashMap<ClientInfo, HashMap<String, byte[]>> _activeClientFileContent;
+
+    private final ReentrantLock printLock = new ReentrantLock();
 
     // Setup
     private boolean _establishConnection(String serverAddr, int serverPort) {
@@ -94,6 +100,10 @@ public class Client {
                 _handleRecovery(serverPacket);
             } else if (serverPacket.getType() == Packet.typeToByte("FAILURE")) {
                 _handleFailure(serverPacket);
+            } else if (serverPacket.getType() == Packet.typeToByte("FILELIST")) {
+                _handleFilelist(serverPacket);
+            } else if (serverPacket.getType() == Packet.typeToByte("FILECONTENT")) {
+                _handleFilecontent(serverPacket);
             } else {
                 System.out.println("Unknown Packet Type from Server");
             }
@@ -123,12 +133,7 @@ public class Client {
         System.out.println("Updated active clients list after recovery");
 
         // Print Full Client List
-        System.out.println();
-        System.out.println("All Active Clients:");
-        for (ClientInfo client : _allActiveClients) {
-            System.out.println(client);
-        }
-        System.out.println();
+        printActiveClients();
 
     }
     private void _handleFailure(Packet serverPacket) {
@@ -143,9 +148,11 @@ public class Client {
         }
 
         // Log failed Clients
+        ArrayList<ClientInfo> deadClients = new ArrayList<>();
         for (ClientInfo client : _allActiveClients) {
             if (!activeClientsFromPacket.contains(client)) {
                 System.out.println("Dead Client: " + client);
+                deadClients.add(client);
             }
         }
 
@@ -154,15 +161,98 @@ public class Client {
         System.out.println("Updated active clients list after failure");
 
         // Print Full Client List
-        System.out.println();
-        System.out.println("All Active Clients:");
-        for (ClientInfo client : _allActiveClients) {
-            System.out.println(client);
+        printActiveClients();
+
+        // Delete Dead Client from File Listings
+        for (ClientInfo client : deadClients) {
+            _activeClientFileListings.remove(client);
         }
-        System.out.println();
+
 
     }
-    
+    private void _handleFilecontent(Packet serverPacket) {
+        if (serverPacket.getData() == null || serverPacket.getData().length == 0) {
+            System.err.println("Error: Received empty FILECONTENT packet");
+            return;
+        }
+        
+        try {
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(serverPacket.getData());
+            ObjectInputStream in = new ObjectInputStream(byteIn);
+            Object obj = in.readObject();
+
+            // Read serverPacket data into _activeClientFileContent
+            if (!(obj instanceof HashMap<?, ?>)) { System.err.println("Error: Expected HashMap"); }
+
+            HashMap<?,?> rawMap = (HashMap<?,?>) obj;
+            HashMap<ClientInfo,HashMap<String, byte[]>> rcvdFileContents = new HashMap<>();
+            for (Map.Entry<?,?> entry : rawMap.entrySet()) {
+                if (!(entry.getKey() instanceof ClientInfo || !(entry.getValue() instanceof HashMap<?,?>))) { System.err.println("Invalid entry type"); continue; }
+
+                ClientInfo client = (ClientInfo) entry.getKey();
+                HashMap<?, ?> rawFileMap = (HashMap<?,?>) entry.getValue();
+                HashMap<String, byte[]> clientFiles = new HashMap<>();
+
+                for (Map.Entry<?,?> fileEntry : rawFileMap.entrySet()) {
+                    if (!(fileEntry.getKey() instanceof String) | !(fileEntry.getValue() instanceof byte[])) { System.err.println("Invalid entry type in fileEntry"); continue; }
+                    clientFiles.put((String) fileEntry.getKey(), (byte[]) fileEntry.getValue());
+                }
+
+                rcvdFileContents.put(client, clientFiles);
+            }
+
+            _activeClientFileContent = rcvdFileContents;
+            // Write file content to disk: each client should be its own subdirectory containing that client's files. We should also ignore file content from this client itself.
+            for (ClientInfo client : _activeClientFileContent.keySet()) {
+                if (client.getNodeID() == _nodeID) {
+                    continue;
+                }
+                _writeFilesFromClient(client, _activeClientFileContent.get(client));
+            }
+
+            printActiveClientFileContent();
+        } catch (IOException | ClassNotFoundException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+    private void _handleFilelist(Packet serverPacket) {
+        
+        if (serverPacket.getData() == null || serverPacket.getData().length == 0) {
+            System.err.println("Error: Received empty FILELIST packet");
+            return;
+        }
+
+        try {
+        ByteArrayInputStream byteIn = new ByteArrayInputStream(serverPacket.getData());
+        ObjectInputStream in = new ObjectInputStream(byteIn);
+        Object obj = in.readObject();
+
+        if (!(obj instanceof HashMap<?, ?>)) { System.err.println("Error: Expected HashMap<String, byte[]> but recieved: " + obj.getClass().getSimpleName()); return;} else {
+            System.out.println("obj is hash map");
+        }
+        HashMap<?,?> rawMap = (HashMap<?,?>) obj;
+        HashMap<ClientInfo, ArrayList<String>> fileListings = new HashMap<>();
+        
+        for (Map.Entry<?,?> entry : rawMap.entrySet()) {
+            if (entry.getKey() instanceof ClientInfo && entry.getValue() instanceof ArrayList<?>) {
+                ArrayList<?> list = (ArrayList<?>) entry.getValue();
+                boolean allStrings = list.stream().allMatch(element -> element instanceof String);
+                if (allStrings) {
+                    fileListings.put((ClientInfo) entry.getKey(), (ArrayList<String>) entry.getValue());
+                }
+            }
+        }
+
+        _activeClientFileListings = fileListings;
+
+        printActiveClientFilelisting();
+
+        } catch (IOException | ClassNotFoundException e) {
+            System.out.println("Error Reading Bytes Client::_handleFileList: " + e.getMessage());
+            System.out.println(e.getStackTrace());
+        }
+
+    }
     // Heartbeat
     private void _sendHeartbeatEvery(int heartbeatInterval) {
         
@@ -227,6 +317,7 @@ public class Client {
         File[] files = new File(String.valueOf(_nodeID)).listFiles();
         if (files != null) { // if dir is not empty
             for (File filename : files) {
+                if (filename.getName().startsWith(".") || filename.isDirectory()) { continue; }
                 fileListing.add(filename.getName());
             }
         }
@@ -288,10 +379,25 @@ public class Client {
         } catch (IOException e) { System.out.println(e.getMessage()); }
     }
     
+    // Filesystem
+    private void _writeFilesFromClient(ClientInfo client, HashMap<String, byte[]> clientFiles) {
+        
+        String thisClientNodeAsString = String.valueOf(_nodeID);
+        String clientDirectory =  thisClientNodeAsString + File.separator + "DownloadedFiles" + File.separator + client.getNodeIDAsString();
+        FileHelper.createDirectory(clientDirectory);
+
+        for (String filename : clientFiles.keySet()) {
+            String filePath = clientDirectory + File.separator + filename;
+            FileHelper.writeFile(filePath, clientFiles.get(filename));
+        }
+    }
+
     // Setup
     public Client(String serverAddr, int serverPort, short nodeID) {
 
         _nodeID = nodeID;
+        _activeClientFileListings = new HashMap<>();
+        _activeClientFileContent = new HashMap<>();
 
         // Establish connection
         boolean conn = _establishConnection(serverAddr, serverPort);
@@ -345,6 +451,83 @@ public class Client {
         }
         } catch (IOException e) { System.out.println(e); }
 
+    }
+    
+    // Printing
+    public void printActiveClientFilelisting() {
+        synchronized (printLock) {
+        System.out.println("\n========== Active Client File Listings ==========");
+    
+        if (_activeClientFileListings == null || _activeClientFileListings.isEmpty()) {
+            System.out.println("No active clients with files.");
+        } else {
+            for (Map.Entry<ClientInfo, ArrayList<String>> entry : _activeClientFileListings.entrySet()) {
+                ClientInfo client = entry.getKey();
+                ArrayList<String> fileList = entry.getValue();
+
+                System.out.println("\nClient: " + client);
+                if (fileList.isEmpty()) {
+                    System.out.println("   No files available.");
+                } else {
+                    for (int i = 0; i < fileList.size(); i++) {
+                        System.out.printf("   %d. %s%n", i + 1, fileList.get(i));
+                    }
+                }
+            }
+        }
+        System.out.println("==================================================\n");
+        }
+    }
+    public void printActiveClients() {
+        synchronized (printLock) {
+        System.out.println("\n========== Active Clients ==========");
+    
+        if (_allActiveClients == null || _allActiveClients.isEmpty()) {
+            System.out.println("No active clients.");
+        } else {
+            for (int i = 0; i < _allActiveClients.size(); i++) {
+                ClientInfo client = _allActiveClients.get(i);
+                System.out.printf("%d. Client ID: %d%n", i + 1, client.getNodeID());
+                System.out.printf("   IP Address: %s%n", client.getIpAddress().getHostAddress());
+                System.out.printf("   Port: %d%n", client.getPort());
+                System.out.printf("   Last Heartbeat: %s%n", client.getFormattedLastHeartbeatTime());
+                System.out.println("------------------------------------");
+            }
+        }
+    
+        System.out.println("====================================\n");
+        }
+    }
+    public void printActiveClientFileContent() {
+        synchronized (printLock) {
+            System.out.println("\n========== Active Client File Contents ==========");
+    
+            if (_activeClientFileContent == null || _activeClientFileContent.isEmpty()) {
+                System.out.println("No active clients with file contents.");
+            } else {
+                for (Map.Entry<ClientInfo, HashMap<String, byte[]>> entry : _activeClientFileContent.entrySet()) {
+                    ClientInfo client = entry.getKey();
+                    HashMap<String, byte[]> fileContents = entry.getValue();
+    
+                    System.out.println("\nClient: " + client);
+                    System.out.printf("   Last Heartbeat: %s%n", client.getFormattedLastHeartbeatTime());
+    
+                    if (fileContents == null || fileContents.isEmpty()) {
+                        System.out.println("   No files available.");
+                    } else {
+                        System.out.println("   Files:");
+                        for (Map.Entry<String, byte[]> fileEntry : fileContents.entrySet()) {
+                            String filename = fileEntry.getKey();
+                            int fileSize = fileEntry.getValue().length; // File size in bytes
+                            System.out.printf("     - %s (%d bytes)%n", filename, fileSize);
+                        }
+                    }
+                    System.out.println("------------------------------------");
+                }
+            }
+    
+            System.out.println("=================================================\n");
+        }
     }
     
 }

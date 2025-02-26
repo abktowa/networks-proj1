@@ -1,3 +1,4 @@
+import java.io.Serializable;
 import java.net.InetAddress;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -5,7 +6,7 @@ import java.util.Objects;
 import java.util.TimeZone;
 
 // Class for storing and managing active Client info (each item in activeClients list)
-public class ClientInfo {
+public class ClientInfo implements Serializable{
 
     private InetAddress _ipAddress;
     private int _port;

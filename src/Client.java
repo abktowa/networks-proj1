@@ -339,9 +339,10 @@ public class Client {
     private void _sendFileContents() {
         try {
         HashMap<String, byte[]> fileContents = new HashMap<>();
-        File[] files = homeDir.listFiles();
+        File[] files = homeDir.listFiles(); //~/Project 1/
         if (files != null) {
             for (File filename : files) {
+                if (filename.isDirectory()) { continue; }
                 if (filename.getName().startsWith(".")) { continue; } // ignore system files
                 byte[] fileContent;
                     fileContent = Files.readAllBytes(filename.toPath());
@@ -407,7 +408,7 @@ public class Client {
         if (!downloadedClientFiles.exists() && downloadedClientFiles.mkdirs()) {
             System.out.println("Created downloaded client files directory: " + downloadedClientFiles.getAbsolutePath());
         }
-        
+
         System.setOut(new ClientPrintStream(System.out, _nodeID));
 
         _activeClientFileListings = new HashMap<>();

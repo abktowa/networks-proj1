@@ -20,6 +20,9 @@ public class Server {
 
     private final ReentrantLock printLock = new ReentrantLock();
 
+    private int _serverPort;
+    private InetAddress _serverAddress;
+
     // Handling Client Packets
     private void _handleClient(DatagramPacket recvPacket, DatagramSocket serverSocket) {
 
@@ -367,14 +370,32 @@ public class Server {
         } catch (IOException i) { System.out.println(i); } 
     }
 
-    public Server(int serverPort) {
+    public Server() {
 
+        _loadConfig();
         _activeClients = new ArrayList<>();
         _activeClientFileListings = new HashMap<ClientInfo, ArrayList<String>>();
         _activeClientFileContents = new HashMap<>();
-        _startServer(serverPort);
+        _startServer(_serverPort);
     }
-
+    private void _loadConfig() {
+        try (BufferedReader br = new BufferedReader(new FileReader("config.txt"))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split("=");
+                if (parts.length == 2) {
+                    if (parts[0].equals("SERVER_IP")) {
+                        String serverIP = parts[1].trim();
+                        _serverAddress = InetAddress.getByName(serverIP);
+                    } else if (parts[0].equals("SERVER_PORT")) {
+                        _serverPort = Integer.parseInt(parts[1].trim());
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error reading config file: " + e.getMessage());
+        }
+    }
     // Helper
     private byte[] _hashMapToBytes(HashMap<?,?> hashMap) {
         

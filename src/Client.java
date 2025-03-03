@@ -96,14 +96,18 @@ public class Client {
             Packet serverPacket = new Packet(packet);
 
             // Handle each packet type
-            if (serverPacket.getType() == Packet.typeToByte("RECOVERY")) {
+            if (serverPacket.getType() == Packet.TYPE_RECOVERY) {
                 _handleRecovery(serverPacket);
-            } else if (serverPacket.getType() == Packet.typeToByte("FAILURE")) {
+            } else if (serverPacket.getType() == Packet.TYPE_FAILURE) {
                 _handleFailure(serverPacket);
-            } else if (serverPacket.getType() == Packet.typeToByte("FILELIST")) {
-                _handleFilelist(serverPacket);
-            } else if (serverPacket.getType() == Packet.typeToByte("FILECONTENT")) {
+            } else if (serverPacket.getType() == Packet.TYPE_FILELIST) {
+                //_handleFilelist(serverPacket);
+            } else if (serverPacket.getType() == Packet.TYPE_FILETRANSFER) {
                 _handleFilecontent(serverPacket);
+            } else if (serverPacket.getType() == Packet.TYPE_FILEUPDATE) {
+                _handleFileUpdate(serverPacket);
+            } else if (serverPacket.getType() == Packet.TYPE_FILEDELETE) {
+                _handleFileDelete(serverPacket);
             } else {
                 System.out.println("Unknown Packet Type from Server");
             }
@@ -215,42 +219,40 @@ public class Client {
             System.out.println(e.getMessage());
         }
     }
-    private void _handleFilelist(Packet serverPacket) {
-        
-        if (serverPacket.getData() == null || serverPacket.getData().length == 0) {
-            System.err.println("Error: Received empty FILELIST packet");
-            return;
-        }
+    private void _handleFileUpdate(Packet serverPacket) {
 
+        String filename = new String(serverPacket.getData(), StandardCharsets.UTF_8);
+
+        System.out.println("Recieved FILEUPDATE: " + filename);
+
+        File newFile = new File(downloadedClientFiles, filename);
         try {
-        ByteArrayInputStream byteIn = new ByteArrayInputStream(serverPacket.getData());
-        ObjectInputStream in = new ObjectInputStream(byteIn);
-        Object obj = in.readObject();
-
-        if (!(obj instanceof HashMap<?, ?>)) { System.err.println("Error: Expected HashMap<String, byte[]> but recieved: " + obj.getClass().getSimpleName()); return;}
-        HashMap<?,?> rawMap = (HashMap<?,?>) obj;
-        HashMap<ClientInfo, ArrayList<String>> fileListings = new HashMap<>();
-        
-        for (Map.Entry<?,?> entry : rawMap.entrySet()) {
-            if (entry.getKey() instanceof ClientInfo && entry.getValue() instanceof ArrayList<?>) {
-                ArrayList<?> list = (ArrayList<?>) entry.getValue();
-                boolean allStrings = list.stream().allMatch(element -> element instanceof String);
-                if (allStrings) {
-                    fileListings.put((ClientInfo) entry.getKey(), (ArrayList<String>) entry.getValue());
-                }
+            if (newFile.createNewFile()) {
+                System.out.println("Created new file: " + newFile.getAbsolutePath());
+            } else {
+                System.out.println("File already exists: " + newFile.getAbsolutePath());
             }
-        }
-
-        _activeClientFileListings = fileListings;
-
-        printActiveClientFilelisting();
-
-        } catch (IOException | ClassNotFoundException e) {
-            System.out.println("Error Reading Bytes Client::_handleFileList: " + e.getMessage());
-            System.out.println(e.getStackTrace());
+        } catch (IOException e) {
+            System.err.println("Error creating file: " + filename + "\n" + e.getMessage());
         }
 
     }
+    private void _handleFileDelete(Packet serverPacket) {
+        
+        String filename = new String(serverPacket.getData(), StandardCharsets.UTF_8);
+
+        System.out.println("Received FILEDELETE: " + filename);
+
+        // Delete file in DownloadedClients directory
+        File fileToDelete = new File(downloadedClientFiles, filename);
+        if (fileToDelete.exists() && fileToDelete.delete()) {
+            System.out.println("Deleted file: " + fileToDelete.getAbsolutePath());
+        } else {
+            System.err.println("Failed to delete file: " + fileToDelete.getAbsolutePath());
+        }
+
+    }
+    
     // Heartbeat
     private void _sendHeartbeatEvery(int heartbeatInterval) {
         
@@ -262,7 +264,7 @@ public class Client {
 
             Packet packet = new Packet();
             packet.setVersion((byte) 1);
-            packet.setType(Packet.typeToByte("HEARTBEAT"));
+            packet.setType(Packet.TYPE_HEARTBEAT);
             packet.setNodeID(_nodeID);
             packet.setTime(System.currentTimeMillis());
             packet.setLength(data.length);
@@ -277,7 +279,7 @@ public class Client {
     } catch (InterruptedException e) { System.out.println("Heartbeats Ended"); }
     }
 
-    // File Listing
+    // File Monitoring
     private void _watchDirectory() {
 
         // Send initial file listing
@@ -295,12 +297,16 @@ public class Client {
         while (true) {
             WatchKey key = watchService.take();
             for (WatchEvent<?> event : key.pollEvents()) {
+
+                String filename = event.context().toString();
+
                 if (event.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
-                    _sendFileListing();
+                    _sendFileUpdate(filename);
+                    _sendFileContent(filename);
                 } else if  (event.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
-                    _sendFileListing();
+                    _sendFileDelete(filename);
                 } else if (event.kind() == StandardWatchEventKinds.ENTRY_MODIFY) {
-                    _sendFileContents();
+                    _sendFileContent(filename);
                 }
             }
             key.reset();
@@ -327,7 +333,7 @@ public class Client {
 
         Packet packet = new Packet();
         packet.setVersion((byte) 1);
-        packet.setType(Packet.typeToByte("FILELIST"));
+        packet.setType(Packet.TYPE_FILELIST);
         packet.setNodeID(_nodeID);
         packet.setTime(System.currentTimeMillis());
         packet.setLength(_fileListing.size());
@@ -336,47 +342,67 @@ public class Client {
         _sendPacketToServer(packet);
         System.out.println("Sending file listing");
     }
-    private void _sendFileContents() {
-        try {
-        HashMap<String, byte[]> fileContents = new HashMap<>();
-        File[] files = homeDir.listFiles(); //~/Project 1/
-        if (files != null) {
-            for (File filename : files) {
-                if (filename.isDirectory()) { continue; }
-                if (filename.getName().startsWith(".")) { continue; } // ignore system files
-                byte[] fileContent;
-                    fileContent = Files.readAllBytes(filename.toPath());
-                    fileContents.put(filename.getName(), fileContent);
-            }
-        }
 
-        if (fileContents.isEmpty()) {
-            System.err.println("No files to send");
-            return;
-        }
-        _fileContents = fileContents;
+    private void _sendFileUpdate(String filename) {
+        
+        Packet packet = new Packet();
+        packet.setVersion((byte) 1);
+        packet.setType(Packet.TYPE_FILEUPDATE);
+        packet.setTime(System.currentTimeMillis());
+        packet.setData(filename.getBytes(StandardCharsets.UTF_8));
 
-        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-        ObjectOutputStream out = new ObjectOutputStream(byteOut);
-        out.writeObject(_fileContents);
-        out.flush();
-        out.reset();
+        _sendPacketToServer(packet);
 
-        byte[] fileContentAsBytes = byteOut.toByteArray();
-        System.out.println("Serialized FILECONTENT packet size: " + fileContentAsBytes.length + " bytes");
+        System.out.println("Sent FILEDELETE for: " + filename);
+    }
+    private void _sendFileDelete(String filename) {
 
         Packet packet = new Packet();
         packet.setVersion((byte) 1);
-        packet.setType(Packet.typeToByte("FILECONTENT"));
+        packet.setType(Packet.TYPE_FILEDELETE);
         packet.setNodeID(_nodeID);
         packet.setTime(System.currentTimeMillis());
-        packet.setLength(fileContentAsBytes.length);
-        packet.setData(fileContentAsBytes);
+        packet.setData(filename.getBytes(StandardCharsets.UTF_8));
 
         _sendPacketToServer(packet);
-        System.out.println("Sent file contents to server");
 
-        } catch (IOException e) { System.out.println(e.getMessage()); }
+        System.out.println("Sent FILEDELETE for: " + filename);
+    }
+    private void _sendFileContent(String filename) {
+
+        try {
+            File file = new File(homeDir, filename);
+            if (!file.exists()) { System.err.println("File not found: " + filename); }
+        
+            byte[] fileContent = _getFileContentAsBytes(file);
+
+            Packet packet = new Packet();
+            packet.setVersion((byte) 1);
+            packet.setType(Packet.TYPE_FILETRANSFER);
+            packet.setNodeID(_nodeID);
+            packet.setTime(System.currentTimeMillis());
+            packet.setData(fileContent);
+
+            _sendPacketToServer(packet);
+            System.out.println("Sent FILETRANSFER for: " + filename);
+        } catch (IOException e) {
+            System.out.println("Error sending FILETRANSFER: " + e.getMessage());
+        }
+
+    }
+    
+    private byte[] _getFileContentAsBytes(File file) throws IOException {
+        
+        byte[] fileContent = Files.readAllBytes(file.toPath());
+        String payload = file.getName() + ":" + serverAddress.getHostAddress();
+
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutputStream out = new ObjectOutputStream(byteOut);
+        out.writeObject(new Object[]{payload, fileContent});
+        out.flush();
+
+        return byteOut.toByteArray();
+    
     }
     
     // Filesystem

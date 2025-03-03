@@ -67,26 +67,14 @@ public class Packet implements Serializable {
 
 
     // Type
-    public static byte typeToByte(String type) {
-        switch (type) {
-            case "HEARTBEAT":
-                return (byte) 1;
-            case "FAILURE":
-                return (byte) 2;
-            case "RECOVERY":
-                return (byte) 3;
-            case "FILELIST":
-                return (byte) 4;
-            case "FILEUPDATE" :
-                return (byte) 5;
-            case "FILEDELETE" :
-                return (byte) 6;
-            case "FILECONTENT" :
-                return (byte) 7;
-            default:
-                return (byte) 0;
-        }
-    }
+    public static byte TYPE_HEARTBEAT = 0x01;
+    public static byte TYPE_FAILURE = 0x02;
+    public static byte TYPE_RECOVERY = 0x03;
+    public static byte TYPE_FILELIST = 0x04;
+    public static byte TYPE_FILEUPDATE = 0x05;
+    public static byte TYPE_FILEDELETE = 0x06;
+    public static byte TYPE_FILETRANSFER = 0x07;
+
     public static String byteToType(byte type) {
         switch (type) {
             case (byte) 0 :
@@ -104,7 +92,7 @@ public class Packet implements Serializable {
             case (byte) 6 :
                 return "FILEDELETE";
             case (byte) 7 :
-                return "FILECONTENT";
+                return "FILETRANSFER";
             default :
                 return String.format("Unknown Byte: %d", (int) type);
         }

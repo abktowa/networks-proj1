@@ -24,12 +24,11 @@ public class Client {
     private Thread _serverListeningThread;
 
     // Client Data
-    private ArrayList<String> _fileListing;
-    private HashMap<String, byte[]> _fileContents;
+    private ArrayList<String> _fileListing; // helper for add/delete from file listing
 
     // Data from Server
     private ArrayList<ClientInfo> _allActiveClients;
-    private HashMap<ClientInfo, ArrayList<String>> _activeClientFileListings; // TODO: Class for Filelist
+    private HashMap<ClientInfo, ArrayList<String>> _activeClientFileListings;
     private HashMap<ClientInfo, HashMap<String, byte[]>> _activeClientFileContent;
 
     // Filesystem
@@ -103,7 +102,7 @@ public class Client {
             } else if (serverPacket.getType() == Packet.TYPE_FILELIST) {
                 //_handleFilelist(serverPacket);
             } else if (serverPacket.getType() == Packet.TYPE_FILETRANSFER) {
-                _handleFilecontent(serverPacket);
+                _handleFileTransfer(serverPacket);
             } else if (serverPacket.getType() == Packet.TYPE_FILEUPDATE) {
                 _handleFileUpdate(serverPacket);
             } else if (serverPacket.getType() == Packet.TYPE_FILEDELETE) {
@@ -174,83 +173,116 @@ public class Client {
 
 
     }
-    private void _handleFilecontent(Packet serverPacket) {
+    private void _handleFileTransfer(Packet serverPacket) {
+        
         if (serverPacket.getData() == null || serverPacket.getData().length == 0) {
-            System.err.println("Error: Received empty FILECONTENT packet");
+            System.err.println("Error: Received empty FILETRANSFER packet");
             return;
         }
         
         try {
+
+            // Deserialize Object[]
             ByteArrayInputStream byteIn = new ByteArrayInputStream(serverPacket.getData());
             ObjectInputStream in = new ObjectInputStream(byteIn);
-            Object obj = in.readObject();
+            Object[] rcvdData = (Object[]) in.readObject();
 
-            // Read serverPacket data into _activeClientFileContent
-            if (!(obj instanceof HashMap<?, ?>)) { System.err.println("Error: Expected HashMap"); }
-
-            HashMap<?,?> rawMap = (HashMap<?,?>) obj;
-            HashMap<ClientInfo,HashMap<String, byte[]>> rcvdFileContents = new HashMap<>();
-            for (Map.Entry<?,?> entry : rawMap.entrySet()) {
-                if (!(entry.getKey() instanceof ClientInfo || !(entry.getValue() instanceof HashMap<?,?>))) { System.err.println("Invalid entry type"); continue; }
-
-                ClientInfo client = (ClientInfo) entry.getKey();
-                HashMap<?, ?> rawFileMap = (HashMap<?,?>) entry.getValue();
-                HashMap<String, byte[]> clientFiles = new HashMap<>();
-
-                for (Map.Entry<?,?> fileEntry : rawFileMap.entrySet()) {
-                    if (!(fileEntry.getKey() instanceof String) | !(fileEntry.getValue() instanceof byte[])) { System.err.println("Invalid entry type in fileEntry"); continue; }
-                    clientFiles.put((String) fileEntry.getKey(), (byte[]) fileEntry.getValue());
-                }
-
-                rcvdFileContents.put(client, clientFiles);
+            // Validate
+            if (!(rcvdData[0] instanceof String) || !(rcvdData[1] instanceof byte[]) || !(rcvdData[2] instanceof ClientInfo)) {
+                System.err.println("Error: Expected Object[] with {String, byte[], ClientInfo} but received different format");
+                return;
             }
 
-            _activeClientFileContent = rcvdFileContents;
-            // Write file content to disk: each client should be its own subdirectory containing that client's files. We should also ignore file content from this client itself.
-            for (ClientInfo client : _activeClientFileContent.keySet()) {
-                if (client.getNodeID() == _nodeID) {
-                    continue;
-                }
-                _writeFilesFromClient(client, _activeClientFileContent.get(client));
+            // Extract filename, file content, client
+            String filename = (String) rcvdData[0];
+            byte[] fileContent = (byte[]) rcvdData[1];
+            ClientInfo clientInfo = (ClientInfo) rcvdData[2];
+            System.out.println("Recieved FILETRANSFER: " + filename + " from client: " + clientInfo.getNodeIDAsString());
+
+            // Directory exists
+            File clientDir = new File(downloadedClientFiles, clientInfo.getNodeIDAsString());
+            if (!clientDir.exists()) { clientDir.mkdirs(); }
+
+            // Write content
+            File fileToWrite = new File(clientDir, filename);
+            try (FileOutputStream fos = new FileOutputStream(fileToWrite)) {
+                fos.write(fileContent);
+                System.out.println("Saved FILETRANSFER: " + fileToWrite.getAbsolutePath());
+            } catch (IOException e) {
+                System.err.println("Error writing file: " + filename);
             }
 
-            printActiveClientFileContent();
         } catch (IOException | ClassNotFoundException e) {
-            System.out.println(e.getMessage());
+            System.err.println("Error handling FILETRANSFER: " + e.getMessage());
         }
     }
     private void _handleFileUpdate(Packet serverPacket) {
 
-        String filename = new String(serverPacket.getData(), StandardCharsets.UTF_8);
-
-        System.out.println("Recieved FILEUPDATE: " + filename);
-
-        File newFile = new File(downloadedClientFiles, filename);
         try {
-            if (newFile.createNewFile()) {
-                System.out.println("Created new file: " + newFile.getAbsolutePath());
-            } else {
-                System.out.println("File already exists: " + newFile.getAbsolutePath());
-            }
-        } catch (IOException e) {
-            System.err.println("Error creating file: " + filename + "\n" + e.getMessage());
-        }
+
+            // Deserialize Object[]
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(serverPacket.getData());
+            ObjectInputStream in = new ObjectInputStream(byteIn);
+            Object[] recievedData = (Object[]) in.readObject();
+
+            // Validate
+            if (recievedData.length != 2 || !(recievedData[0] instanceof String) || !(recievedData[1] instanceof ClientInfo)) {
+                System.err.println("Error: Expected Object[] with {String, ClientInfo}");
+                return;
+            } 
+
+            // Extract filename and ClientInfo
+            String filename = (String) recievedData[0];
+            ClientInfo updatedClient = (ClientInfo) recievedData[1];
+            System.out.println("Received FILEUPDATE: " + filename + " from client: " + updatedClient.getNodeIDAsString());
+            
+            // Check dir exists for client
+            File clientDir = new File(downloadedClientFiles, updatedClient.getNodeIDAsString());
+            if (!clientDir.exists()) { clientDir.mkdirs(); }
+
+            // Create new file
+            File newFile = new File(clientDir, filename);
+            if (!newFile.exists()) {
+                if (newFile.createNewFile()) {
+                    System.out.println("Created new file: " + newFile.getAbsolutePath());
+                } else {
+                    System.err.println("Failed to create file: " + newFile.getAbsolutePath());
+                }
+            } else { System.out.println("File already exists: " + newFile.getAbsolutePath()); }
+        } catch (IOException | ClassNotFoundException e) { System.err.println("Error handling FILEUPDATE: " + e.getMessage()); }
 
     }
     private void _handleFileDelete(Packet serverPacket) {
         
-        String filename = new String(serverPacket.getData(), StandardCharsets.UTF_8);
+        try {
 
-        System.out.println("Received FILEDELETE: " + filename);
+            // Deserialize Object[]
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(serverPacket.getData());
+            ObjectInputStream in = new ObjectInputStream(byteIn);
+            Object[] rcvdData = (Object[]) in.readObject();
 
-        // Delete file in DownloadedClients directory
-        File fileToDelete = new File(downloadedClientFiles, filename);
-        if (fileToDelete.exists() && fileToDelete.delete()) {
-            System.out.println("Deleted file: " + fileToDelete.getAbsolutePath());
-        } else {
+            // Validate
+            if (rcvdData.length != 2 || !(rcvdData[0] instanceof String) || !(rcvdData[1] instanceof ClientInfo)) {
+                System.err.println("Error: Expected Object[] with {String, ClientInfo} but received different format");
+                return;
+            }
+
+            // Extract filename and client it belongs to
+            String filename = (String) rcvdData[0];
+            ClientInfo updatedClient = (ClientInfo) rcvdData[1];
+            System.out.println("Receieved FILEDELETE: " + filename + " from client " + updatedClient.getNodeIDAsString());
+
+            File clientDir = new File(downloadedClientFiles, updatedClient.getNodeIDAsString());
+            File fileToDelete = new File(clientDir, filename);
+            if (fileToDelete.exists() && fileToDelete.delete()) {
+                System.out.println("Deleted file: " + fileToDelete.getAbsolutePath());
+            } else {
             System.err.println("Failed to delete file: " + fileToDelete.getAbsolutePath());
-        }
+            }
 
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Error handling FILEDELETE: " + e.getMessage());
+        }
     }
     
     // Heartbeat
@@ -405,18 +437,6 @@ public class Client {
     
     }
     
-    // Filesystem
-    private void _writeFilesFromClient(ClientInfo client, HashMap<String, byte[]> clientFiles) {
-        
-        File clientDirectory = new File(downloadedClientFiles.getPath(), client.getNodeIDAsString());
-        FileHelper.createDirectory(clientDirectory.getAbsolutePath());
-
-        for (String filename : clientFiles.keySet()) {
-            String filePath = clientDirectory + File.separator + filename;
-            FileHelper.writeFile(filePath, clientFiles.get(filename));
-        }
-    }
-
     // Setup
     public Client() {
 

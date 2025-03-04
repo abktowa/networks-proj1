@@ -17,7 +17,6 @@ public class Server {
     private final ReentrantLock printLock = new ReentrantLock();
 
     private int _serverPort;
-    private InetAddress _serverAddress;
 
     private File homeDir;
     private File downloadedClientFiles;
@@ -113,7 +112,7 @@ public class Server {
             _sendFileTransferToAllClients(filename, fileContent, client);
 
         } catch (IOException | ClassNotFoundException e) {
-            System.err.println("Error processing FILECONTENT: " + e.getMessage());
+            System.err.println("Error processing FILETRANSFER: " + e.getMessage());
         }
 
     }
@@ -395,7 +394,7 @@ public class Server {
                 if (parts.length == 2) {
                     if (parts[0].equals("SERVER_IP")) {
                         String serverIP = parts[1].trim();
-                        _serverAddress = InetAddress.getByName(serverIP);
+                        //_serverAddress = InetAddress.getByName(serverIP);
                     } else if (parts[0].equals("SERVER_PORT")) {
                         _serverPort = Integer.parseInt(parts[1].trim());
                     }

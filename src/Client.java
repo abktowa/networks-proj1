@@ -314,8 +314,6 @@ public class Client {
     // File Monitoring
     private void _watchDirectory() {
 
-        // Send initial file listing
-        _sendFileListing();
         // https://www.geeksforgeeks.org/watch-a-directory-for-changes-in-java/
         try {
         Path directoryPath = Paths.get(homeDir.getAbsolutePath());
@@ -346,34 +344,6 @@ public class Client {
         } catch (IOException e) { System.out.println(e); 
         } catch (InterruptedException e) { System.out.println("Ended Directory Watching"); }
     }
-    private void _sendFileListing() {
-
-        // Get file listing and put in array
-        ArrayList<String> fileListing = new ArrayList<String>();
-        File[] files = homeDir.listFiles();
-
-        if (files != null) { // if dir is not empty
-            for (File filename : files) {
-                if (filename.getName().startsWith(".") || filename.isDirectory()) { continue; }
-                fileListing.add(filename.getName());
-            }
-        }
-        _fileListing = fileListing;
-
-        // Construct packet with file listing
-        String fileListString = String.join(",", _fileListing);
-
-        Packet packet = new Packet();
-        packet.setVersion((byte) 1);
-        packet.setType(Packet.TYPE_FILELIST);
-        packet.setNodeID(_nodeID);
-        packet.setTime(System.currentTimeMillis());
-        packet.setLength(_fileListing.size());
-        packet.setData(fileListString.getBytes());
-
-        _sendPacketToServer(packet);
-        System.out.println("Sending file listing");
-    }
 
     private void _sendFileUpdate(String filename) {
         
@@ -385,7 +355,7 @@ public class Client {
 
         _sendPacketToServer(packet);
 
-        System.out.println("Sent FILEDELETE for: " + filename);
+        System.out.println("Sent FILEUPDATE for: " + filename);
     }
     private void _sendFileDelete(String filename) {
 

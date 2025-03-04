@@ -78,3 +78,49 @@ Packets are serialized using Java's `ObjectOutputStream` and contain:
 - Clients automatically **reconnect** if the server restarts.
 - If a file transfer fails, the server logs the error and retries on the next sync.
 - The system detects **corrupt files** by checking expected vs. received byte length.
+
+
+## File Structure of Clients and Server
+
+The system maintains structured directories on both the **Client** and **Server** to organize and synchronize files effectively.
+
+### **Client File Structure**
+Each client maintains a **home directory (`Project1/`)** for storing its own files and a **DownloadedClients/** directory for storing files received from other clients.
+
+```
+|-- Project1/                      # Client's home directory
+|   |-- DownloadedClients/         # Stores files received from other clients
+|   |   |-- <ClientID_1>/          # Files received from Client 1
+|   |   |-- <ClientID_2>/          # Files received from Client 2
+|   |-- (User's files)             # Client's own files, monitored for changes
+```
+
+- **Client's Own Files**: The root `Project1/` directory stores the files that the client creates, modifies, or deletes.
+- **DownloadedClients/**: This folder contains subdirectories for each active client, where files received from other clients are stored.
+- When the **client shuts down**, all directories inside `DownloadedClients/` are deleted.
+
+---
+
+### **Server File Structure**
+The server maintains a **DownloadedClients/** directory to store files from all connected clients.
+
+```
+|-- Project1/                      # Server's home directory
+|   |-- DownloadedClients/         # Stores files uploaded by clients
+|   |   |-- <ClientID_1>/          # Files from Client 1
+|   |   |-- <ClientID_2>/          # Files from Client 2
+|   |   |-- ...                    # More clients
+```
+
+- The server **stores files uploaded by clients** in the `DownloadedClients/` directory.
+- Each **ClientID** corresponds to a subdirectory containing that client's shared files.
+- When a **client fails**, the server deletes its directory and notifies other clients to do the same.
+- When the **server shuts down**, all directories in `DownloadedClients/` are deleted.
+
+---
+
+### **File Cleanup Behavior**
+- When a client **disconnects**, it removes all files received from other clients.
+- When the **server detects a failed client**, it deletes that client’s directory and instructs other clients to remove it.
+- Both **Client and Server register shutdown hooks**, ensuring cleanup when terminated with **Ctrl+C**.
+

@@ -4,6 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Server {
@@ -15,6 +17,7 @@ public class Server {
     private HashMap<ClientInfo, HashMap<String, byte[]>> _activeClientFileContents;
 
     private final ReentrantLock printLock = new ReentrantLock();
+    private ExecutorService clientThreadPool = Executors.newFixedThreadPool(10);
 
     private int _serverPort;
 
@@ -119,7 +122,7 @@ public class Server {
     private void _handleFileUpdate(Packet clientPacket, InetAddress clientaAddress, int clientPort) {
 
         String filename = new String(clientPacket.getData(), StandardCharsets.UTF_8);
-        ClientInfo client = new ClientInfo(clientaAddress, clientPort, clientPort, clientPacket.getNodeID());
+        ClientInfo client = new ClientInfo(clientaAddress, clientPort, clientPacket.getTime(), clientPacket.getNodeID());
 
         System.out.println("New file: " + filename + " added to client: " + client);
 
@@ -343,10 +346,11 @@ public class Server {
             serverSocket.receive(recvPacket);
             
             // Handle incoming client messages, each on new thread
-            Thread clientHandlerThread = new Thread(() -> {
+            /*Thread clientHandlerThread = new Thread(() -> {
                 _handleClient(recvPacket, serverSocket);
             });
-            clientHandlerThread.start();
+            clientHandlerThread.start();*/
+            clientThreadPool.execute(() -> _handleClient(recvPacket, serverSocket));
 
         }
     }

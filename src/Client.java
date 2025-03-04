@@ -53,12 +53,13 @@ public class Client {
             if (socket != null) { socket.close(); }
         } catch (IOException i) { System.out.println(i); }
 
-        _heartbeatThread.interrupt();
-        _watchDirectoryThread.interrupt();
+        if (_heartbeatThread != null) { _heartbeatThread.interrupt(); }
+        if (_watchDirectoryThread != null) { _watchDirectoryThread.interrupt(); }
+        if (_serverListeningThread != null) { _serverListeningThread.interrupt(); }
     }
     
     // Communicate with Server
-    private void _sendPacketToServer(Packet packet) {
+    private synchronized void _sendPacketToServer(Packet packet) {
 
         packet.setNodeID(_nodeID);
 
@@ -108,7 +109,7 @@ public class Client {
             } else if (serverPacket.getType() == Packet.TYPE_FILEDELETE) {
                 _handleFileDelete(serverPacket);
             } else {
-                System.out.println("Unknown Packet Type from Server");
+                System.out.println("Unknown Packet Type from Server: " + serverPacket.getType());
             }
         } catch (IOException e) { System.out.println(e);
         } catch (ClassNotFoundException e) { System.out.println(e); }
@@ -608,6 +609,7 @@ public class Client {
     }
 
     // ChatGPT
+    // Format Client printing
     private class ClientPrintStream extends PrintStream {
         private final short nodeID;
         private boolean newLine = true; // Tracks if a new line has started

@@ -4,10 +4,9 @@ public class Main {
 
         String opt = "SERVER";
 
-        if (args.length > 0 && args.length < 1) { System.out.println("java Main.java [\"CLIENT\" or \"SERVER\"]"); return; }
-        if (args.length == 1) {
-            opt = args[0];
-        }
+        if (args.length != 1) { System.out.println("java Main.java [\"CLIENT\" or \"SERVER\"]"); return; }
+        
+        opt = args[0];
         
         if (opt.equals("CLIENT")) {
             

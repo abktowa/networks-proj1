@@ -148,7 +148,8 @@ public class Server {
         FileHelper.createDirectory(clientDirectory);
     }
     private void _deleteClientDirectory(ClientInfo client) {
-        String clientDirectoryPath = "Server" + File.separator + client.getNodeIDAsString();
+        
+        String clientDirectoryPath = new File(downloadedClientFiles, client.getNodeIDAsString()).getAbsolutePath();
         FileHelper.deleteDirectory(clientDirectoryPath);
     }
     private void _updateClientFileListing(ClientInfo client, String filename, Boolean isAdded) {

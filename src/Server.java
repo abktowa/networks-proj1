@@ -10,7 +10,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Server {
  
-    private DatagramSocket serverSocket = null; // Waits for incoming client requests
+    private DatagramSocket serverSocket = null;
 
     private ArrayList<ClientInfo> _activeClients;
     private HashMap<ClientInfo, ArrayList<String>> _activeClientFileListings;
@@ -187,7 +187,17 @@ public class Server {
         System.out.println("Updated server storage with new file contents: " + filePath);
     
     }
-    
+    private void _deleteAllDownloadedClients() {
+        if (downloadedClientFiles.exists()) {
+            File[] directories = downloadedClientFiles.listFiles(File::isDirectory);
+            if (directories != null) {
+                for (File dir : directories) {
+                    FileHelper.deleteDirectory(dir.getAbsolutePath());
+                }
+            }
+        }
+    }
+
     // Sending to Clients
     private void _sendFileUpdateToAllClients(String filename, ClientInfo updatedClient) {
 
@@ -387,6 +397,12 @@ public class Server {
         if (!downloadedClientFiles.exists() && downloadedClientFiles.mkdirs()) {
             System.out.println("Created downloaded client files directory: " + downloadedClientFiles.getAbsolutePath());
         }
+
+        // ChatGPT
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Server shutting down. Deleting all Client files");
+            _deleteAllDownloadedClients();
+        }));
 
         _startServer(_serverPort);
     }

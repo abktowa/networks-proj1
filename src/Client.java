@@ -37,7 +37,7 @@ public class Client {
 
     private final ReentrantLock printLock = new ReentrantLock();
 
-    // Setup
+    // Connection Handling
     private boolean _establishConnection(InetAddress serverAddr, int serverPort) {
 
         try {
@@ -56,6 +56,8 @@ public class Client {
         if (_heartbeatThread != null) { _heartbeatThread.interrupt(); }
         if (_watchDirectoryThread != null) { _watchDirectoryThread.interrupt(); }
         if (_serverListeningThread != null) { _serverListeningThread.interrupt(); }
+
+        _deleteDownloadedClients();
     }
     
     // Communicate with Server
@@ -168,8 +170,9 @@ public class Client {
         printActiveClients();
 
         // Delete Dead Client from File Listings
-        for (ClientInfo client : deadClients) {
-            _activeClientFileListings.remove(client);
+        for (ClientInfo deadClient : deadClients) {
+            _activeClientFileListings.remove(deadClient);
+            _deleteClientDirectory(deadClient);
         }
 
 
@@ -312,7 +315,7 @@ public class Client {
     } catch (InterruptedException e) { System.out.println("Heartbeats Ended"); }
     }
 
-    // File Monitoring
+    // File Handling
     private void _watchDirectory() {
 
         // https://www.geeksforgeeks.org/watch-a-directory-for-changes-in-java/
@@ -345,7 +348,39 @@ public class Client {
         } catch (IOException e) { System.out.println(e); 
         } catch (InterruptedException e) { System.out.println("Ended Directory Watching"); }
     }
+    private byte[] _getFileContentAsBytes(File file) throws IOException {
+        
+        byte[] fileContent = Files.readAllBytes(file.toPath());
+        String payload = file.getName() + ":" + serverAddress.getHostAddress();
 
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutputStream out = new ObjectOutputStream(byteOut);
+        out.writeObject(new Object[]{payload, fileContent});
+        out.flush();
+
+        return byteOut.toByteArray();
+    
+    }
+    private void _deleteDownloadedClients() {
+        if (downloadedClientFiles.exists()) {
+            File[] clientDirectories = downloadedClientFiles.listFiles(File::isDirectory);
+            if (clientDirectories != null) {
+                for (File clientDirectory : clientDirectories) {
+                    FileHelper.deleteDirectory(clientDirectory.getAbsolutePath());
+                }
+            }
+        }
+    }
+    private void _deleteClientDirectory(ClientInfo deadClient) {
+
+        File deadClientDirectory = new File(downloadedClientFiles, deadClient.getNodeIDAsString());
+        if (deadClientDirectory != null) {
+            FileHelper.deleteDirectory(deadClientDirectory.getAbsolutePath());
+        }
+
+    }
+
+    // Sending File Updates To Server
     private void _sendFileUpdate(String filename) {
         
         Packet packet = new Packet();
@@ -416,20 +451,6 @@ public class Client {
         }
     }
 
-    private byte[] _getFileContentAsBytes(File file) throws IOException {
-        
-        byte[] fileContent = Files.readAllBytes(file.toPath());
-        String payload = file.getName() + ":" + serverAddress.getHostAddress();
-
-        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-        ObjectOutputStream out = new ObjectOutputStream(byteOut);
-        out.writeObject(new Object[]{payload, fileContent});
-        out.flush();
-
-        return byteOut.toByteArray();
-    
-    }
-    
     // Setup
     public Client() {
 
@@ -456,6 +477,12 @@ public class Client {
         // Establish connection
         boolean conn = _establishConnection(serverAddress, serverPort);
         if (!conn) { System.out.println("Connection failed"); return; }
+
+        // ChatGPT
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Client shutting down. Deleting all DownloadedClients");
+            _deleteDownloadedClients();
+        }));
 
         _startClient();
 

@@ -503,6 +503,9 @@ public class Client {
         });
         _heartbeatThread.start();
 
+        // Send all files to server
+        _sendAllExisitingFiles();
+
         // Start File Listing Sending
         _watchDirectoryThread = new Thread(() -> {
             _watchDirectory();
@@ -514,9 +517,6 @@ public class Client {
             _listen();
         });
         _serverListeningThread.start();
-
-        // Send all files to server
-        _sendAllExisitingFiles();
 
     }
     private void _loadConfig() {

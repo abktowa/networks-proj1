@@ -423,6 +423,28 @@ public class Client {
 
     }
     
+    private void _sendAllExisitingFiles() {
+        if (homeDir == null || !homeDir.exists()) {
+            System.err.println("Home directory does not exist");
+            return;
+        }
+
+        File[] files = homeDir.listFiles();
+        if (files == null || files.length == 0) {
+            System.out.println("No existing files to send");
+            return;
+        } 
+
+        System.out.println("Sending all files to server");
+        for (File file : files) {
+            if (file.isDirectory()) continue;
+
+            String filename = file.getName();
+            _sendFileUpdate(filename);
+            _sendFileContent(filename);
+        }
+    }
+
     private byte[] _getFileContentAsBytes(File file) throws IOException {
         
         byte[] fileContent = Files.readAllBytes(file.toPath());
@@ -493,24 +515,8 @@ public class Client {
         });
         _serverListeningThread.start();
 
-        // Input from terminal
-        in = new BufferedReader(new InputStreamReader(System.in));
-        byte[] sendData;
-
-        try {
-        while (true) {
-
-            // Read message from command line
-            String message = in.readLine();
-            sendData = message.getBytes();
-
-            // Send message as UDP packet
-            DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverAddress, serverPort);
-            socket.send(sendPacket);
-
-            if (message.equals("exit")) { break; } // Disconnect client
-        }
-        } catch (IOException e) { System.out.println(e); }
+        // Send all files to server
+        _sendAllExisitingFiles();
 
     }
     private void _loadConfig() {

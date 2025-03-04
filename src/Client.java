@@ -458,6 +458,15 @@ public class Client {
 
         _startClient();
 
+        while (true) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                System.out.println("Client shut down");
+                break;
+            }
+        }
+
         // Close connection
         _closeConnection();
     }

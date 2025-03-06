@@ -116,7 +116,11 @@ public class Server {
 
             ClientInfo client = new ClientInfo(clientAddress, clientPort, clientPacket.getTime(), clientPacket.getNodeID());
 
-            _activeClientFileContents.put(client, new HashMap<String, byte[]>() {{ put(filename, fileContent); }});
+            synchronized (_activeClientFileContents) {
+                _activeClientFileContents.computeIfAbsent(client, k -> new HashMap<>()).put(filename, fileContent); // ChatGPT
+            }
+
+            //_activeClientFileContents.put(client, new HashMap<String, byte[]>() {{ put(filename, fileContent); }});
             _writeFileToServer(filename, fileContent, client);
             _sendFileTransferToAllClients(filename, fileContent, client);
 
@@ -132,6 +136,10 @@ public class Server {
 
         System.out.println("New file: " + filename + " added to client: " + client);
 
+        synchronized (_activeClientFileListings) {
+            _activeClientFileListings.computeIfAbsent(client, k -> new ArrayList<>()).add(filename); // ChatGPT
+        }
+
         _updateClientFileListing(client, filename, true);
         _sendFileUpdateToAllClients(filename, client);
 
@@ -142,6 +150,28 @@ public class Server {
         ClientInfo client = new ClientInfo(clientaAddress, clientPort, clientPacket.getTime(), clientPacket.getNodeID());
 
         System.out.println("File deleted: " + filename + " from client: " + client);
+
+        // Remove from active file listings
+        synchronized (_activeClientFileListings) {
+            ArrayList<String> fileList = _activeClientFileListings.get(client);
+            if (fileList != null) {
+                fileList.remove(filename);
+                if (fileList.isEmpty()) {
+                    _activeClientFileListings.remove(client); // Remove client entry if no files left
+                }
+            }
+        }
+
+        // Remove from active file contents
+        synchronized (_activeClientFileContents) {
+            HashMap<String, byte[]> fileContents = _activeClientFileContents.get(client);
+            if (fileContents != null) {
+                fileContents.remove(filename);
+                if (fileContents.isEmpty()) {
+                    _activeClientFileContents.remove(client); // Remove client entry if no files left
+                }
+            }
+        }
 
         _updateClientFileListing(client, filename, false);
         _sendFileDeleteToAllClients(filename, client);

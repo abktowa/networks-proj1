@@ -685,7 +685,7 @@ public class Client {
             }
     
             // **Only add "[CLIENT nodeID] " if it's not already there**
-            if (newLine && !message.startsWith("[CLIENT " + nodeID + "]")) {
+            if (newLine && !message.contains("[CLIENT " + nodeID + "]")) {
                 message = "[CLIENT " + nodeID + "] " + message;
             }
     
@@ -702,7 +702,7 @@ public class Client {
             }
     
             // **Only add "[CLIENT nodeID] " if it's not already there**
-            if (newLine && !message.startsWith("[CLIENT " + nodeID + "]")) {
+            if (newLine && !message.contains("[CLIENT " + nodeID + "]")) {
                 message = "[CLIENT " + nodeID + "] " + message;
             }
     
@@ -715,7 +715,7 @@ public class Client {
             String message = String.format(format, args);
     
             // **Only add "[CLIENT nodeID] " if it's not already there**
-            if (newLine && !message.startsWith("[CLIENT " + nodeID + "]")) {
+            if (newLine && !message.contains("[CLIENT " + nodeID + "]")) {
                 message = "[CLIENT " + nodeID + "] " + message;
             }
     

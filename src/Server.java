@@ -590,7 +590,7 @@ public class Server {
             }
     
             // **Only add "[SERVER] " if it's not already there**
-            if (newLine && !message.startsWith("[SERVER]")) {
+            if (newLine && !message.contains("[SERVER]")) {
                 message = "[SERVER] " + message;
             }
     
@@ -607,7 +607,7 @@ public class Server {
             }
     
             // **Only add "[SERVER] " if it's not already there**
-            if (newLine && !message.startsWith("[SERVER]")) {
+            if (newLine && !message.contains("[SERVER]")) {
                 message = "[SERVER] " + message;
             }
     
@@ -620,7 +620,7 @@ public class Server {
             String message = String.format(format, args);
     
             // **Only add "[SERVER] " if it's not already there**
-            if (newLine && !message.startsWith("[SERVER]")) {
+            if (newLine && !message.contains("[SERVER]")) {
                 message = "[SERVER] " + message;
             }
     

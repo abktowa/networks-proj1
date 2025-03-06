@@ -67,13 +67,13 @@ public class Packet implements Serializable {
 
 
     // Type
-    public static byte TYPE_HEARTBEAT = 0x01;
-    public static byte TYPE_FAILURE = 0x02;
-    public static byte TYPE_RECOVERY = 0x03;
-    public static byte TYPE_FILELIST = 0x04;
-    public static byte TYPE_FILEUPDATE = 0x05;
-    public static byte TYPE_FILEDELETE = 0x06;
-    public static byte TYPE_FILETRANSFER = 0x07;
+    public static final byte TYPE_HEARTBEAT = 0x01;
+    public static final byte TYPE_FAILURE = 0x02;
+    public static final byte TYPE_RECOVERY = 0x03;
+    public static final byte TYPE_FILELIST = 0x04;
+    public static final byte TYPE_FILEUPDATE = 0x05;
+    public static final byte TYPE_FILEDELETE = 0x06;
+    public static final byte TYPE_FILETRANSFER = 0x07;
 
     public static String byteToType(byte type) {
         switch (type) {
@@ -120,7 +120,34 @@ public class Packet implements Serializable {
         this._data = constructedPacket._data;
     } 
 
+    private String colorForType(byte type) {
+        switch (type) {
+            case Packet.TYPE_HEARTBEAT :
+                return PINK;
+            case Packet.TYPE_FAILURE :
+                return RED;
+            case Packet.TYPE_FILEDELETE :
+                return LIGHT_RED;
+            case Packet.TYPE_FILETRANSFER :
+                return BLUE;
+            case Packet.TYPE_FILEUPDATE :
+                return DARK_GREEN;
+            case Packet.TYPE_RECOVERY :
+                return GREEN;
+            default :
+                return RESET;
+
+        }
+    }
+
     // Formatting & Printing Packet
+    private static final String RESET = "\033[0m";  // Reset color
+    private static final String PINK = "\033[95m";  // Heartbeats
+    private static final String RED = "\033[91m";   // Dead clients
+    private static final String GREEN = "\033[92m"; // Recovered clients
+    private static final String DARK_GREEN = "\033[32m"; // File updates
+    private static final String LIGHT_RED = "\033[31m";  // File deletes
+    private static final String BLUE = "\033[94m";  // File transfers
     @Override
     public String toString() {
         String out = String.format("Packet Recieved: \n" +
@@ -134,7 +161,9 @@ public class Packet implements Serializable {
                                     (int) this._nodeID, 
                                     this.getFormattedTime(), 
                                     new String(this._data));
-        return out;
+        String color = colorForType(this._type);
+
+        return color + out + RESET;
     }
     public String getFormattedTime() {
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");

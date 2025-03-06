@@ -581,9 +581,9 @@ public class Server {
                 color = RED;
             } else if (message.contains("New Client:")) {
                 color = GREEN;
-            } else if (message.contains("New file:")) {
+            } else if (message.contains("New file:") || message.contains("FILEUPDATE")) {
                 color = DARK_GREEN;
-            } else if (message.contains("File deleted:")) {
+            } else if (message.contains("File deleted:") || message.contains("FILEDELETE")) {
                 color = LIGHT_RED;
             } else if (message.contains("FILETRANSFER")) {
                 color = BLUE;

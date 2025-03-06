@@ -330,9 +330,17 @@ public class Server {
                 fileUpdatePacket.setType(Packet.TYPE_FILEUPDATE);
                 fileUpdatePacket.setNodeID(existingClient.getNodeID());
                 fileUpdatePacket.setTime(System.currentTimeMillis());
-                fileUpdatePacket.setData(filename.getBytes(StandardCharsets.UTF_8));
+                
+                try {
 
-                _sendPacketToClient(fileUpdatePacket, newClient);
+                    ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+                    ObjectOutputStream out = new ObjectOutputStream(byteOut);
+                    out.writeObject(new Object[]{filename, newClient});
+                    out.flush();
+                    fileUpdatePacket.setData(byteOut.toByteArray());
+                    _sendPacketToClient(fileUpdatePacket, newClient);
+        
+                    } catch (IOException e) { System.err.println("Error writing file update to bytes");}
 
                 // Send FILETRANSFER
                 HashMap<String, byte[]> fileContents = _activeClientFileContents.get(existingClient);

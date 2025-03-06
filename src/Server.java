@@ -589,7 +589,7 @@ public class Server {
                 color = BLUE;
             }
     
-            // Ensure every message starts with [SERVER]
+            // **Only add "[SERVER] " if it's not already there**
             if (newLine && !message.startsWith("[SERVER]")) {
                 message = "[SERVER] " + message;
             }
@@ -606,7 +606,7 @@ public class Server {
                 return;
             }
     
-            // Ensure every message starts with [SERVER]
+            // **Only add "[SERVER] " if it's not already there**
             if (newLine && !message.startsWith("[SERVER]")) {
                 message = "[SERVER] " + message;
             }
@@ -619,7 +619,7 @@ public class Server {
         public PrintStream printf(String format, Object... args) {
             String message = String.format(format, args);
     
-            // Ensure every message starts with [SERVER]
+            // **Only add "[SERVER] " if it's not already there**
             if (newLine && !message.startsWith("[SERVER]")) {
                 message = "[SERVER] " + message;
             }

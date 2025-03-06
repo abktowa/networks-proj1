@@ -684,8 +684,8 @@ public class Client {
                 color = BLUE;
             }
     
-            // Ensure every message starts with [CLIENT nodeID]
-            if (newLine && !message.startsWith("[CLIENT")) {
+            // **Only add "[CLIENT nodeID] " if it's not already there**
+            if (newLine && !message.startsWith("[CLIENT " + nodeID + "]")) {
                 message = "[CLIENT " + nodeID + "] " + message;
             }
     
@@ -701,8 +701,8 @@ public class Client {
                 return;
             }
     
-            // Ensure every message starts with [CLIENT nodeID]
-            if (newLine && !message.startsWith("[CLIENT")) {
+            // **Only add "[CLIENT nodeID] " if it's not already there**
+            if (newLine && !message.startsWith("[CLIENT " + nodeID + "]")) {
                 message = "[CLIENT " + nodeID + "] " + message;
             }
     
@@ -714,8 +714,8 @@ public class Client {
         public PrintStream printf(String format, Object... args) {
             String message = String.format(format, args);
     
-            // Ensure every message starts with [CLIENT nodeID]
-            if (newLine && !message.startsWith("[CLIENT")) {
+            // **Only add "[CLIENT nodeID] " if it's not already there**
+            if (newLine && !message.startsWith("[CLIENT " + nodeID + "]")) {
                 message = "[CLIENT " + nodeID + "] " + message;
             }
     

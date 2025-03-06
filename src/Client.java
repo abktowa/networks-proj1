@@ -676,11 +676,11 @@ public class Client {
                 color = RED;
             } else if (message.contains("New Client:")) {
                 color = GREEN;
-            } else if (message.contains("Received FILEUPDATE")) {
+            } else if (message.contains("FILEUPDATE")) {
                 color = DARK_GREEN;
-            } else if (message.contains("Received FILEDELETE")) {
+            } else if (message.contains("FILEDELETE")) {
                 color = LIGHT_RED;
-            } else if (message.contains("Received FILETRANSFER")) {
+            } else if (message.contains("FILETRANSFER")) {
                 color = BLUE;
             }
     

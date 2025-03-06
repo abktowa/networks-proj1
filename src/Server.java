@@ -575,7 +575,7 @@ public class Server {
     
             // Apply color coding based on message content
             String color = RESET;
-            if (message.contains("heartbeat")) {
+            if (message.contains("heartbeat") || message.contains("HEARTBEAT")) {
                 color = PINK;
             } else if (message.contains("Detected client failure")) {
                 color = RED;
@@ -585,7 +585,7 @@ public class Server {
                 color = DARK_GREEN;
             } else if (message.contains("File deleted:")) {
                 color = LIGHT_RED;
-            } else if (message.contains("Received FILETRANSFER")) {
+            } else if (message.contains("FILETRANSFER")) {
                 color = BLUE;
             }
     

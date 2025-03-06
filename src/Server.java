@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReentrantLock;
@@ -88,6 +89,11 @@ public class Server {
             // Create directory if new client
             if (isNewClient) {
                 _makeClientDirectory(newClient);
+            }
+
+            // Send new client all existing files
+            if (isNewClient) {
+                _sendExistingFilesToClient(newClient);
             }
 
             // Print active clients
@@ -306,6 +312,56 @@ public class Server {
         } catch (IOException e) { System.out.println("Error sending packet to Client: " + e); }
 
     }
+
+    private void _sendExistingFilesToClient(ClientInfo newClient) {
+    synchronized (_activeClientFileListings) {
+        for (Map.Entry<ClientInfo, ArrayList<String>> entry : _activeClientFileListings.entrySet()) {
+            ClientInfo existingClient = entry.getKey();
+            ArrayList<String> fileList = entry.getValue();
+
+            if (existingClient.equals(newClient)) {
+                continue; // Skip the new client itself
+            }
+
+            for (String filename : fileList) {
+                // Send FILEUPDATE first
+                Packet fileUpdatePacket = new Packet();
+                fileUpdatePacket.setVersion((byte) 1);
+                fileUpdatePacket.setType(Packet.TYPE_FILEUPDATE);
+                fileUpdatePacket.setNodeID(existingClient.getNodeID());
+                fileUpdatePacket.setTime(System.currentTimeMillis());
+                fileUpdatePacket.setData(filename.getBytes(StandardCharsets.UTF_8));
+
+                _sendPacketToClient(fileUpdatePacket, newClient);
+
+                // Send FILETRANSFER
+                HashMap<String, byte[]> fileContents = _activeClientFileContents.get(existingClient);
+                if (fileContents != null && fileContents.containsKey(filename)) {
+                    byte[] fileContent = fileContents.get(filename);
+
+                    Packet fileTransferPacket = new Packet();
+                    fileTransferPacket.setVersion((byte) 1);
+                    fileTransferPacket.setType(Packet.TYPE_FILETRANSFER);
+                    fileTransferPacket.setNodeID(existingClient.getNodeID());
+                    fileTransferPacket.setTime(System.currentTimeMillis());
+
+                    try {
+                        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+                        ObjectOutputStream out = new ObjectOutputStream(byteOut);
+                        out.writeObject(new Object[]{filename, fileContent, existingClient});
+                        out.flush();
+                        fileTransferPacket.setData(byteOut.toByteArray());
+
+                        _sendPacketToClient(fileTransferPacket, newClient);
+                    } catch (IOException e) {
+                        System.err.println("Error sending FILETRANSFER: " + e.getMessage());
+                    }
+                }
+            }
+        }
+    }
+}
+
 
     // Server Functions
     private void _monitorClientFailures() {

@@ -499,6 +499,8 @@ public class Server {
             _deleteAllDownloadedClients();
         }));
 
+        System.setOut(new ServerPrintStream(System.out));
+
         _startServer(_serverPort);
     }
     private void _loadConfig() {
@@ -539,6 +541,92 @@ public class Server {
         }
     
         System.out.println("====================================\n");
+        }
+    }
+ 
+    private class ServerPrintStream extends PrintStream {
+        private static final String RESET = "\033[0m";  // Reset color
+        private static final String PINK = "\033[95m";  // Heartbeats
+        private static final String RED = "\033[91m";   // Dead clients
+        private static final String GREEN = "\033[92m"; // Recovered clients
+        private static final String DARK_GREEN = "\033[32m"; // File updates
+        private static final String LIGHT_RED = "\033[31m";  // File deletes
+        private static final String BLUE = "\033[94m";  // File transfers
+    
+        private boolean newLine = true; // Tracks if a new line has started
+    
+        public ServerPrintStream(OutputStream out) {
+            super(out, true);
+        }
+    
+        @Override
+        public void println() {
+            super.println();
+            newLine = true;
+        }
+    
+        @Override
+        public void println(String message) {
+            if (message == null || message.isEmpty()) {
+                super.println();
+                newLine = true;
+                return;
+            }
+    
+            // Apply color coding based on message content
+            String color = RESET;
+            if (message.contains("heartbeat")) {
+                color = PINK;
+            } else if (message.contains("Detected client failure")) {
+                color = RED;
+            } else if (message.contains("New Client:")) {
+                color = GREEN;
+            } else if (message.contains("New file:")) {
+                color = DARK_GREEN;
+            } else if (message.contains("File deleted:")) {
+                color = LIGHT_RED;
+            } else if (message.contains("Received FILETRANSFER")) {
+                color = BLUE;
+            }
+    
+            // Ensure every message starts with [SERVER]
+            if (newLine && !message.startsWith("[SERVER]")) {
+                message = "[SERVER] " + message;
+            }
+    
+            // Apply color and print message
+            super.println(color + message + RESET);
+            newLine = true;
+        }
+    
+        @Override
+        public void print(String message) {
+            if (message == null) {
+                super.print("");
+                return;
+            }
+    
+            // Ensure every message starts with [SERVER]
+            if (newLine && !message.startsWith("[SERVER]")) {
+                message = "[SERVER] " + message;
+            }
+    
+            super.print(message);
+            newLine = message.endsWith("\n");
+        }
+    
+        @Override
+        public PrintStream printf(String format, Object... args) {
+            String message = String.format(format, args);
+    
+            // Ensure every message starts with [SERVER]
+            if (newLine && !message.startsWith("[SERVER]")) {
+                message = "[SERVER] " + message;
+            }
+    
+            super.print(message);
+            newLine = message.endsWith("\n");
+            return this;
         }
     }
     

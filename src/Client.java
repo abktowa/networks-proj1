@@ -638,6 +638,14 @@ public class Client {
     // ChatGPT
     // Format Client printing
     private class ClientPrintStream extends PrintStream {
+        private static final String RESET = "\033[0m";  // Reset color
+        private static final String PINK = "\033[95m";  // Heartbeats
+        private static final String RED = "\033[91m";   // Dead clients
+        private static final String GREEN = "\033[92m"; // Recovered clients
+        private static final String DARK_GREEN = "\033[32m"; // File updates
+        private static final String LIGHT_RED = "\033[31m";  // File deletes
+        private static final String BLUE = "\033[94m";  // File transfers
+    
         private final short nodeID;
         private boolean newLine = true; // Tracks if a new line has started
     
@@ -647,46 +655,72 @@ public class Client {
         }
     
         @Override
-        public void println() { // Handle empty println()
+        public void println() {
             super.println();
-            newLine = true; // Ensure prefix prints on next line
+            newLine = true;
         }
     
         @Override
         public void println(String message) {
-            if (message == null || message.isEmpty()) { // Handle empty/null lines
+            if (message == null || message.isEmpty()) {
                 super.println();
                 newLine = true;
                 return;
             }
-            if (newLine && !message.startsWith("[CLIENT")) { // Prevent duplicate prefix
+    
+            // Apply color coding based on message content
+            String color = RESET;
+            if (message.contains("Sending heartbeat")) {
+                color = PINK;
+            } else if (message.contains("Dead Client:")) {
+                color = RED;
+            } else if (message.contains("New Client:")) {
+                color = GREEN;
+            } else if (message.contains("Received FILEUPDATE")) {
+                color = DARK_GREEN;
+            } else if (message.contains("Received FILEDELETE")) {
+                color = LIGHT_RED;
+            } else if (message.contains("Received FILETRANSFER")) {
+                color = BLUE;
+            }
+    
+            // Ensure every message starts with [CLIENT nodeID]
+            if (newLine && !message.startsWith("[CLIENT")) {
                 message = "[CLIENT " + nodeID + "] " + message;
             }
-            super.println(message);
-            newLine = true; // Ensure next line gets a prefix
+    
+            // Apply color and print message
+            super.println(color + message + RESET);
+            newLine = true;
         }
     
         @Override
         public void print(String message) {
-            if (message == null) { // Handle null messages
+            if (message == null) {
                 super.print("");
                 return;
             }
-            if (newLine && !message.startsWith("[CLIENT")) { // Add prefix only at the start of a line
+    
+            // Ensure every message starts with [CLIENT nodeID]
+            if (newLine && !message.startsWith("[CLIENT")) {
                 message = "[CLIENT " + nodeID + "] " + message;
             }
+    
             super.print(message);
-            newLine = message.endsWith("\n"); // Detect if the message ends a line
+            newLine = message.endsWith("\n");
         }
     
         @Override
         public PrintStream printf(String format, Object... args) {
             String message = String.format(format, args);
-            if (newLine && !message.startsWith("[CLIENT")) { // Prevent duplicate prefix
+    
+            // Ensure every message starts with [CLIENT nodeID]
+            if (newLine && !message.startsWith("[CLIENT")) {
                 message = "[CLIENT " + nodeID + "] " + message;
             }
+    
             super.print(message);
-            newLine = message.endsWith("\n"); // Detect if the message ends a line
+            newLine = message.endsWith("\n");
             return this;
         }
     }

@@ -38,13 +38,13 @@ Edit `config.txt` to set the **server IP** and **port**:
 
 Run the following command to start the server:
 ```sh
-java -cp out/ Main SERVER
+java Main SERVER
 ```
 
 ### **Starting a Client**
 Run the following command to start a client:
 ```sh
-java -cp out/ Main CLIENT
+java Main CLIENT
 ```
 
 ### **File Synchronization**
@@ -123,4 +123,6 @@ The server maintains a **DownloadedClients/** directory to store files from all 
 - When a client **disconnects**, it removes all files received from other clients.
 - When the **server detects a failed client**, it deletes that client’s directory and instructs other clients to remove it.
 - Both **Client and Server register shutdown hooks**, ensuring cleanup when terminated with **Ctrl+C**.
+
+with **Ctrl+C**.
 

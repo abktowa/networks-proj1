@@ -29,7 +29,7 @@ public class Packet implements Serializable {
     private byte[] _data;
 
     public Packet() {
-        this._version = (byte) 1;
+        this._version = (byte) 2;
         this._type = (byte) 0;
         this._nodeID = (short) -1;
         this._time = System.currentTimeMillis();

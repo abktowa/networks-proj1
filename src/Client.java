@@ -299,7 +299,7 @@ public class Client {
             byte[] data = dataString.getBytes();
 
             Packet packet = new Packet();
-            packet.setVersion((byte) 1);
+            packet.setVersion((byte) 2);
             packet.setType(Packet.TYPE_HEARTBEAT);
             packet.setNodeID(_nodeID);
             packet.setTime(System.currentTimeMillis());
@@ -384,7 +384,7 @@ public class Client {
     private void _sendFileUpdate(String filename) {
         
         Packet packet = new Packet();
-        packet.setVersion((byte) 1);
+        packet.setVersion((byte) 2);
         packet.setType(Packet.TYPE_FILEUPDATE);
         packet.setTime(System.currentTimeMillis());
         packet.setData(filename.getBytes(StandardCharsets.UTF_8));
@@ -396,7 +396,7 @@ public class Client {
     private void _sendFileDelete(String filename) {
 
         Packet packet = new Packet();
-        packet.setVersion((byte) 1);
+        packet.setVersion((byte) 2);
         packet.setType(Packet.TYPE_FILEDELETE);
         packet.setNodeID(_nodeID);
         packet.setTime(System.currentTimeMillis());
@@ -415,7 +415,7 @@ public class Client {
             byte[] fileContent = _getFileContentAsBytes(file);
 
             Packet packet = new Packet();
-            packet.setVersion((byte) 1);
+            packet.setVersion((byte) 2);
             packet.setType(Packet.TYPE_FILETRANSFER);
             packet.setNodeID(_nodeID);
             packet.setTime(System.currentTimeMillis());

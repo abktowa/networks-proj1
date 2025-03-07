@@ -240,7 +240,7 @@ public class Server {
 
         for (ClientInfo client : _activeClients) {
             Packet packet = new Packet();
-            packet.setVersion((byte) 1);
+            packet.setVersion((byte) 2);
             packet.setType(Packet.TYPE_FILEUPDATE);
             packet.setNodeID((short) -1);
             packet.setTime(System.currentTimeMillis());
@@ -264,7 +264,7 @@ public class Server {
         for (ClientInfo client: _activeClients) {
 
             Packet packet = new Packet();
-            packet.setVersion((byte) 1);
+            packet.setVersion((byte) 2);
             packet.setType(Packet.TYPE_FILEDELETE);
             packet.setNodeID((short) -1);
             packet.setTime(System.currentTimeMillis());
@@ -288,7 +288,7 @@ public class Server {
         for (ClientInfo client : _activeClients) {
 
             Packet packet = new Packet();
-            packet.setVersion((byte) 1);
+            packet.setVersion((byte) 2);
             packet.setType(Packet.TYPE_FILETRANSFER);
             packet.setTime(System.currentTimeMillis());
             packet.setNodeID((short) -1);
@@ -321,7 +321,7 @@ public class Server {
 
             for (ClientInfo client : _activeClients) {
                 Packet packet = new Packet();
-                packet.setVersion((byte) 1);
+                packet.setVersion((byte) 2);
                 packet.setType(recoveryOrFailureType);
                 packet.setNodeID((short) -1); // -1 for Server ID
                 packet.setTime(System.currentTimeMillis());
@@ -356,7 +356,7 @@ public class Server {
             for (String filename : fileList) {
                 // Send FILEUPDATE first
                 Packet fileUpdatePacket = new Packet();
-                fileUpdatePacket.setVersion((byte) 1);
+                fileUpdatePacket.setVersion((byte) 2);
                 fileUpdatePacket.setType(Packet.TYPE_FILEUPDATE);
                 fileUpdatePacket.setNodeID(existingClient.getNodeID());
                 fileUpdatePacket.setTime(System.currentTimeMillis());
@@ -378,7 +378,7 @@ public class Server {
                     byte[] fileContent = fileContents.get(filename);
 
                     Packet fileTransferPacket = new Packet();
-                    fileTransferPacket.setVersion((byte) 1);
+                    fileTransferPacket.setVersion((byte) 2);
                     fileTransferPacket.setType(Packet.TYPE_FILETRANSFER);
                     fileTransferPacket.setNodeID(existingClient.getNodeID());
                     fileTransferPacket.setTime(System.currentTimeMillis());
